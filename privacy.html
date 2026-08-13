@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidden Gem — Privacy Policy</title>
+<script>
+  (function () {
+    var ua = navigator.userAgent || navigator.vendor || "";
+    var isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile/i.test(ua);
+    var isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#b5651d" />
+</head>
+<body data-page="privacy.html">
+<main style="max-width:640px;">
+  <div class="stack">
+    <h1>Privacy Policy</h1>
+    <p class="muted">Last updated: August 2026</p>
+
+    <h2>What we collect</h2>
+    <p>When you create a Hidden Gem account, we store the account info you provide (email, or your name/profile photo if you sign in with Facebook) and anything you add while using the app: pins you create (title, description, category, location, and any photos you attach, plus whether you've marked them public or private), comments and likes on pins, who you follow, and visits you plan (including invitee emails/phone numbers/usernames you enter). If you connect a calendar, we store the connection needed to sync events you create — never your calendar password or app-specific password in plain text.</p>
+
+    <h2>How we use it</h2>
+    <p>Solely to run the app: showing your pins on the map, sharing public pins and comments with other users as intended, sending calendar invites for visits you schedule, and letting people you invite view a pin or visit through a share link. We don't sell your data or share it with advertisers.</p>
+
+    <h2>Where it's stored</h2>
+    <p>In a <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> project (Postgres database + file storage), access-controlled so your private pins are only visible to you and anyone you've explicitly invited.</p>
+
+    <h2>Third-party sign-in</h2>
+    <p>If you sign in with Facebook, we receive your name, email (if you grant that permission), and profile photo from Facebook to create your account — we don't receive your Facebook password or post anything to Facebook on your behalf.</p>
+
+    <h2>Your data, deleted</h2>
+    <p>See our <a href="data-deletion.html">Data Deletion Instructions</a> for how to request deletion of your account and everything tied to it.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about this policy or your data: <a href="mailto:andrewquinn737@gmail.com">andrewquinn737@gmail.com</a>.</p>
+  </div>
+</main>
+</body>
+</html>
