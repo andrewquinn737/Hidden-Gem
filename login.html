@@ -14,7 +14,8 @@
 </script>
 <link rel="stylesheet" href="css/style.css" />
 <link rel="manifest" href="manifest.json" />
-<link rel="icon" href="favicon.png" />
+<link rel="icon" href="favicon.ico" sizes="any" />
+<link rel="icon" href="favicon.png" type="image/png" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="theme-color" content="#b5651d" />
 </head>
@@ -100,7 +101,7 @@
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        showSuccess("Account created — check your email to confirm, then sign in.");
+        window.location.href = redirectTarget;
       }
     } catch (err) {
       showError(err.message || "Something went wrong.");

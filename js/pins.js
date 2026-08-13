@@ -9,20 +9,20 @@ if (session) {
     btn.addEventListener("click", () => {
       tab = btn.dataset.tab;
       tabButtons.forEach((b) => b.classList.toggle("btn-primary", b === btn));
-      loadPins();
+      loadFeed();
     })
   );
   tabButtons[0]?.classList.add("btn-primary");
 
-  async function loadPins() {
-    const cardsEl = document.getElementById("pinCards");
-    const tableBodyEl = document.getElementById("pinTableBody");
-    cardsEl.innerHTML = '<p class="muted">Loading…</p>';
-    tableBodyEl.innerHTML = "";
+  async function loadFeed() {
+    const feedEl = document.getElementById("feed");
+    feedEl.innerHTML = '<p class="muted">Loading…</p>';
 
     let query = supabase
       .from("pins")
-      .select("id, title, category, visibility, owner_id, created_at, pin_likes(count), pin_comments(count)")
+      .select(
+        "id, title, description, category, owner_id, created_at, pin_photos(storage_path, created_at), pin_likes(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)"
+      )
       .order("created_at", { ascending: false });
 
     if (tab === "mine") {
@@ -33,7 +33,7 @@ if (session) {
       const { data: follows } = await supabase.from("follows").select("followee_id").eq("follower_id", session.user.id);
       const ids = (follows || []).map((f) => f.followee_id);
       if (ids.length === 0) {
-        cardsEl.innerHTML = '<p class="muted">You\'re not following anyone yet.</p>';
+        feedEl.innerHTML = '<p class="muted" style="text-align:center;">You\'re not following anyone yet.</p>';
         return;
       }
       query = query.in("owner_id", ids).eq("visibility", "public");
@@ -41,44 +41,75 @@ if (session) {
 
     const { data: pins, error } = await query;
     if (error) {
-      cardsEl.innerHTML = `<p class="error-text">${error.message}</p>`;
+      feedEl.innerHTML = `<p class="error-text">${error.message}</p>`;
       return;
     }
     if (!pins.length) {
-      cardsEl.innerHTML = '<p class="muted">No pins here yet.</p>';
+      feedEl.innerHTML = '<p class="muted" style="text-align:center;">No pins here yet.</p>';
       return;
     }
 
-    cardsEl.innerHTML = "";
-    pins.forEach((pin) => {
-      const likeCount = pin.pin_likes?.[0]?.count ?? 0;
-      const commentCount = pin.pin_comments?.[0]?.count ?? 0;
+    feedEl.innerHTML = "";
+    for (const pin of pins) {
+      feedEl.appendChild(await renderPost(pin));
+    }
+  }
 
-      const card = document.createElement("a");
-      card.href = `pin.html?id=${pin.id}`;
-      card.className = "card";
-      card.style.display = "block";
-      card.style.marginBottom = "0.75rem";
-      card.innerHTML = `
-        <div class="row-between">
-          <strong>${escapeHtml(pin.title)}</strong>
-          <span class="pill">${pin.visibility}</span>
-        </div>
-        <p class="muted" style="margin:0.25rem 0;">${escapeHtml(pin.category || "")}</p>
-        <div class="muted">❤ ${likeCount} · 💬 ${commentCount}</div>
-      `;
-      cardsEl.appendChild(card);
+  async function renderPost(pin) {
+    const cover = [...(pin.pin_photos || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+    const likeCount = pin.pin_likes?.length ?? 0;
+    const iLiked = (pin.pin_likes || []).some((l) => l.user_id === session.user.id);
+    const commentCount = pin.pin_comments?.[0]?.count ?? 0;
+    const owner = pin.profiles;
 
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td><a href="pin.html?id=${pin.id}">${escapeHtml(pin.title)}</a></td>
-        <td>${escapeHtml(pin.category || "")}</td>
-        <td><span class="pill">${pin.visibility}</span></td>
-        <td>${likeCount}</td>
-        <td>${commentCount}</td>
-      `;
-      tableBodyEl.appendChild(row);
+    const post = document.createElement("article");
+    post.className = "feed-post";
+
+    let ownerAvatarUrl = "icons/icon-192.png";
+    if (owner?.avatar_url) {
+      const { data } = await supabase.storage.from("media").createSignedUrl(owner.avatar_url, 3600);
+      if (data?.signedUrl) ownerAvatarUrl = data.signedUrl;
+    }
+
+    let photoHtml;
+    if (cover) {
+      const { data } = await supabase.storage.from("media").createSignedUrl(cover.storage_path, 3600);
+      photoHtml = `<a href="pin.html?id=${pin.id}"><img class="feed-post-photo" src="${data?.signedUrl || ""}" alt="${escapeHtml(pin.title)}" /></a>`;
+    } else {
+      photoHtml = `<a href="pin.html?id=${pin.id}"><div class="feed-post-photo-placeholder">🗺️</div></a>`;
+    }
+
+    post.innerHTML = `
+      <div class="feed-post-header">
+        <img class="avatar" style="width:32px; height:32px;" src="${ownerAvatarUrl}" />
+        <strong>${escapeHtml(owner?.username || "someone")}</strong>
+        ${pin.category ? `<span class="pill" style="margin-left:auto;">${escapeHtml(pin.category)}</span>` : ""}
+      </div>
+      ${photoHtml}
+      <div class="feed-post-actions">
+        <button class="like-btn ${iLiked ? "liked" : ""}" data-pin-id="${pin.id}">${iLiked ? "❤" : "🤍"}</button>
+        <a href="pin.html?id=${pin.id}" style="color:inherit;">💬</a>
+      </div>
+      <div class="feed-post-body">
+        <p class="likes">${likeCount} ${likeCount === 1 ? "like" : "likes"}</p>
+        <p class="caption"><strong>${escapeHtml(owner?.username || "someone")}</strong> <a href="pin.html?id=${pin.id}" style="color:inherit;">${escapeHtml(pin.title)}</a></p>
+        ${pin.description ? `<p class="caption muted">${escapeHtml(pin.description)}</p>` : ""}
+        ${commentCount ? `<a href="pin.html?id=${pin.id}" class="muted" style="font-size:0.9rem;">View all ${commentCount} comments</a>` : ""}
+      </div>
+    `;
+
+    post.querySelector(".like-btn").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      if (iLiked) {
+        await supabase.from("pin_likes").delete().eq("pin_id", pin.id).eq("user_id", session.user.id);
+      } else {
+        await supabase.from("pin_likes").insert({ pin_id: pin.id, user_id: session.user.id });
+      }
+      loadFeed();
     });
+
+    return post;
   }
 
   function escapeHtml(str) {
@@ -87,5 +118,5 @@ if (session) {
     return div.innerHTML;
   }
 
-  await loadPins();
+  await loadFeed();
 }

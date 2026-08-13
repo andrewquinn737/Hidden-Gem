@@ -49,6 +49,7 @@ if (session) {
         <p class="muted">by ${escapeHtml(owner?.username || "someone")} · ${escapeHtml(pin.category || "uncategorized")}</p>
         ${pin.description ? `<p>${escapeHtml(pin.description)}</p>` : ""}
         ${photoUrls.length ? `<div class="photo-grid">${photoUrls.map((u) => `<img src="${u}" />`).join("")}</div>` : ""}
+        ${pin.directions ? `<div class="card"><strong>How to get there</strong><p style="margin:0.35rem 0 0;">${escapeHtml(pin.directions)}</p></div>` : ""}
 
         <div class="row">
           <button id="likeBtn" class="btn ${myLike ? "btn-primary" : ""}">❤ ${likes?.length ?? 0}</button>

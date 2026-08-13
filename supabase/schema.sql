@@ -29,6 +29,7 @@ create table public.pins (
   owner_id uuid not null references public.profiles(id) on delete cascade,
   title text not null,
   description text,
+  directions text,
   category text,
   lat double precision not null,
   lng double precision not null,

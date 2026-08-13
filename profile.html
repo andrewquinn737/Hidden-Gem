@@ -14,19 +14,28 @@
 </script>
 <link rel="stylesheet" href="css/style.css" />
 <link rel="manifest" href="manifest.json" />
-<link rel="icon" href="favicon.png" />
+<link rel="icon" href="favicon.ico" sizes="any" />
+<link rel="icon" href="favicon.png" type="image/png" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="theme-color" content="#b5651d" />
 </head>
 <body data-page="profile.html">
 <div id="topnav"></div>
 <main class="stack">
-  <div class="row">
-    <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
-    <label class="btn">
-      Change photo
-      <input id="avatarInput" type="file" accept="image/*" style="display:none;" />
-    </label>
+  <div class="row-between">
+    <div class="row">
+      <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
+      <div>
+        <strong id="profileUsername" style="font-size:1.15rem;">—</strong>
+        <div class="muted" id="profileFullName"></div>
+      </div>
+    </div>
+    <div style="position:relative;">
+      <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
+      <div id="menuDropdown" class="card" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem;">
+        <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
+      </div>
+    </div>
   </div>
 
   <div class="row card">
@@ -35,15 +44,7 @@
     <div><strong id="statFollowing">0</strong><div class="muted">following</div></div>
   </div>
 
-  <form id="profileForm" class="card stack">
-    <h2 style="margin:0;">Your profile</h2>
-    <input id="usernameInput" placeholder="Username" required maxlength="30" />
-    <input id="fullNameInput" placeholder="Full name" maxlength="120" />
-    <textarea id="bioInput" placeholder="Bio" rows="3" maxlength="280"></textarea>
-    <p class="error-text" id="profileFormError" style="display:none;"></p>
-    <p class="muted" id="profileSaved" style="display:none;">Saved.</p>
-    <button type="submit" class="btn btn-primary">Save</button>
-  </form>
+  <div id="pinsGrid" class="pins-grid"></div>
 
   <div class="card stack">
     <h2 style="margin:0;">Calendars</h2>
