@@ -226,7 +226,19 @@ declare
   final_username text;
   suffix int := 0;
 begin
-  base_username := lower(regexp_replace(coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)), '[^a-z0-9_]', '', 'g'));
+  -- 'user' as the final coalesce fallback matters for OAuth providers (e.g.
+  -- Facebook) where a user can decline the email permission — without it,
+  -- base_username could end up NULL and violate profiles.username NOT NULL.
+  base_username := lower(regexp_replace(
+    coalesce(
+      new.raw_user_meta_data->>'username',
+      split_part(new.email, '@', 1),
+      new.raw_user_meta_data->>'name',
+      new.raw_user_meta_data->>'full_name',
+      'user'
+    ),
+    '[^a-z0-9_]', '', 'g'
+  ));
   if base_username = '' then
     base_username := 'user';
   end if;
@@ -235,8 +247,13 @@ begin
     suffix := suffix + 1;
     final_username := base_username || suffix::text;
   end loop;
-  insert into public.profiles (id, username, full_name)
-  values (new.id, final_username, coalesce(new.raw_user_meta_data->>'full_name', new.email));
+  insert into public.profiles (id, username, full_name, avatar_url)
+  values (
+    new.id,
+    final_username,
+    coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', new.email),
+    new.raw_user_meta_data->>'avatar_url'
+  );
   return new;
 end;
 $$;

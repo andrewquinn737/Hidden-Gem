@@ -36,7 +36,12 @@
         <button type="submit" id="submitBtn" class="btn btn-primary">Sign in</button>
       </form>
 
-      <button id="magicLinkBtn" class="btn-link" style="text-align:center;">Or email me a magic link instead</button>
+      <div class="row" style="align-items:center; gap:0.5rem; margin: 0.25rem 0;">
+        <hr style="flex:1; border:none; border-top:1px solid var(--border);" />
+        <span class="muted" style="font-size:0.8rem;">or</span>
+        <hr style="flex:1; border:none; border-top:1px solid var(--border);" />
+      </div>
+      <button id="facebookBtn" class="btn" style="background:#1877F2; border-color:#1877F2; color:#fff;">Continue with Facebook</button>
       <p id="formError" class="error-text" style="display:none;"></p>
       <p id="formSuccess" class="muted" style="display:none;"></p>
     </div>
@@ -104,12 +109,12 @@
     }
   });
 
-  document.getElementById("magicLinkBtn").addEventListener("click", async () => {
-    const email = document.getElementById("email").value.trim();
-    if (!email) return showError("Enter your email first.");
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) return showError(error.message);
-    showSuccess("Magic link sent — check your email.");
+  document.getElementById("facebookBtn").addEventListener("click", async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "facebook",
+      options: { redirectTo: `${window.location.origin}/${redirectTarget}` },
+    });
+    if (error) showError(error.message);
   });
 </script>
 </body>
