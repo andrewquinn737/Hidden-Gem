@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidden Gem — Map</title>
+<script>
+  (function () {
+    var ua = navigator.userAgent || navigator.vendor || "";
+    var isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile/i.test(ua);
+    var isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
+  })();
+</script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#b5651d" />
+<style>
+  main.map-main { max-width: none; padding: 0; }
+  .map-toolbar {
+    position: absolute;
+    top: 4.5rem; left: 0.75rem; right: 0.75rem;
+    z-index: 40;
+    display: flex; gap: 0.5rem; flex-wrap: wrap;
+  }
+  .map-toolbar form { flex: 1; min-width: 160px; display: flex; }
+  .map-toolbar input { border-radius: var(--radius) 0 0 var(--radius); }
+  .map-toolbar button[type=submit] { border-radius: 0 var(--radius) var(--radius) 0; }
+</style>
+</head>
+<body data-page="index.html">
+<div id="topnav"></div>
+<main class="map-main">
+  <div class="map-toolbar">
+    <form id="searchForm">
+      <input id="searchInput" placeholder="Search a place…" />
+      <button type="submit" class="btn">Go</button>
+    </form>
+    <button id="geolocateBtn" class="btn">📍</button>
+    <button id="addPinBtn" class="btn">+ Add pin</button>
+  </div>
+  <div id="map"></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script type="module" src="js/map.js"></script>
+<script type="module" src="js/pwa.js"></script>
+</body>
+</html>

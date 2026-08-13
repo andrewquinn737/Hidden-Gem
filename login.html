@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidden Gem — Sign in</title>
+<script>
+  (function () {
+    var ua = navigator.userAgent || navigator.vendor || "";
+    var isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile/i.test(ua);
+    var isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#b5651d" />
+</head>
+<body data-page="login.html">
+<main style="max-width:380px; margin-top: 3rem;">
+  <div class="stack">
+    <h1 style="text-align:center; margin-bottom:0;">🗺️ Hidden Gem</h1>
+    <p class="muted" style="text-align:center; margin-top:0;">Find it. Mark it. Share it.</p>
+
+    <div class="card stack">
+      <div class="row" style="gap:0;">
+        <button id="tabSignIn" class="btn" style="flex:1; border-radius: var(--radius) 0 0 var(--radius);">Sign in</button>
+        <button id="tabSignUp" class="btn" style="flex:1; border-radius: 0 var(--radius) var(--radius) 0;">Sign up</button>
+      </div>
+
+      <form id="authForm" class="stack">
+        <input id="email" type="email" placeholder="Email" required autocomplete="email" />
+        <input id="password" type="password" placeholder="Password" required autocomplete="current-password" minlength="8" />
+        <button type="submit" id="submitBtn" class="btn btn-primary">Sign in</button>
+      </form>
+
+      <button id="magicLinkBtn" class="btn-link" style="text-align:center;">Or email me a magic link instead</button>
+      <p id="formError" class="error-text" style="display:none;"></p>
+      <p id="formSuccess" class="muted" style="display:none;"></p>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+  import { supabase } from "./js/supabaseClient.js";
+
+  const redirectTarget = new URLSearchParams(window.location.search).get("redirect") || "index.html";
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) window.location.href = redirectTarget;
+
+  let mode = "signin"; // "signin" | "signup"
+  const tabSignIn = document.getElementById("tabSignIn");
+  const tabSignUp = document.getElementById("tabSignUp");
+  const submitBtn = document.getElementById("submitBtn");
+  const form = document.getElementById("authForm");
+  const errorEl = document.getElementById("formError");
+  const successEl = document.getElementById("formSuccess");
+
+  function setMode(next) {
+    mode = next;
+    tabSignIn.classList.toggle("btn-primary", mode === "signin");
+    tabSignUp.classList.toggle("btn-primary", mode === "signup");
+    submitBtn.textContent = mode === "signin" ? "Sign in" : "Create account";
+    document.getElementById("password").autocomplete = mode === "signin" ? "current-password" : "new-password";
+  }
+  tabSignIn.addEventListener("click", () => setMode("signin"));
+  tabSignUp.addEventListener("click", () => setMode("signup"));
+  setMode("signin");
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.style.display = "block";
+    successEl.style.display = "none";
+  }
+  function showSuccess(msg) {
+    successEl.textContent = msg;
+    successEl.style.display = "block";
+    errorEl.style.display = "none";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.style.display = "none";
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    submitBtn.disabled = true;
+    try {
+      if (mode === "signin") {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        window.location.href = redirectTarget;
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        showSuccess("Account created — check your email to confirm, then sign in.");
+      }
+    } catch (err) {
+      showError(err.message || "Something went wrong.");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  document.getElementById("magicLinkBtn").addEventListener("click", async () => {
+    const email = document.getElementById("email").value.trim();
+    if (!email) return showError("Enter your email first.");
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) return showError(error.message);
+    showSuccess("Magic link sent — check your email.");
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidden Gem — Profile</title>
+<script>
+  (function () {
+    var ua = navigator.userAgent || navigator.vendor || "";
+    var isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile/i.test(ua);
+    var isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#b5651d" />
+</head>
+<body data-page="profile.html">
+<div id="topnav"></div>
+<main class="stack">
+  <div class="row">
+    <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
+    <label class="btn">
+      Change photo
+      <input id="avatarInput" type="file" accept="image/*" style="display:none;" />
+    </label>
+  </div>
+
+  <div class="row card">
+    <div><strong id="statPins">0</strong><div class="muted">pins</div></div>
+    <div><strong id="statFollowers">0</strong><div class="muted">followers</div></div>
+    <div><strong id="statFollowing">0</strong><div class="muted">following</div></div>
+  </div>
+
+  <form id="profileForm" class="card stack">
+    <h2 style="margin:0;">Your profile</h2>
+    <input id="usernameInput" placeholder="Username" required maxlength="30" />
+    <input id="fullNameInput" placeholder="Full name" maxlength="120" />
+    <textarea id="bioInput" placeholder="Bio" rows="3" maxlength="280"></textarea>
+    <p class="error-text" id="profileFormError" style="display:none;"></p>
+    <p class="muted" id="profileSaved" style="display:none;">Saved.</p>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+
+  <div class="card stack">
+    <h2 style="margin:0;">Calendars</h2>
+    <div class="row-between"><span>Google Calendar</span><span id="googleStatus" class="pill">—</span></div>
+    <div class="row-between"><span>Apple Calendar</span><span id="appleStatus" class="pill">—</span></div>
+    <p class="muted">Manage connections from the Scheduler tab.</p>
+  </div>
+
+  <div class="card stack">
+    <h2 style="margin:0;">Share Hidden Gem</h2>
+    <p class="muted" style="margin:0;">Invite someone else to start marking their own spots.</p>
+    <div class="row">
+      <button id="shareAppBtn" class="btn btn-primary" style="flex:1;">Share app</button>
+      <button id="installAppBtn" class="btn" style="flex:1;">Install app</button>
+    </div>
+    <p id="shareStatus" class="muted" style="display:none;"></p>
+  </div>
+</main>
+
+<script type="module" src="js/profile.js"></script>
+<script type="module" src="js/pwa.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidden Gem — Scheduler</title>
+<script>
+  (function () {
+    var ua = navigator.userAgent || navigator.vendor || "";
+    var isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile/i.test(ua);
+    var isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#b5651d" />
+</head>
+<body data-page="scheduler.html">
+<div id="topnav"></div>
+<main>
+  <div class="row" style="margin-bottom:1rem;">
+    <button id="connectGoogleBtn" class="btn">Connect Google Calendar</button>
+    <button id="connectAppleBtn" class="btn">Connect Apple Calendar</button>
+  </div>
+
+  <button id="planVisitBtn" class="btn btn-primary" style="margin-bottom:1rem;">+ Plan a visit</button>
+
+  <form id="visitForm" class="card stack" style="display:none; margin-bottom:1.5rem;" data-container-id="newVisitForm">
+    <select id="visitPinSelect" required></select>
+    <input id="visitWhen" type="datetime-local" required />
+    <textarea id="visitNotes" placeholder="Notes (optional)" rows="2"></textarea>
+    <input id="visitInvitees" placeholder="Invite by username, email, or phone — comma separated" />
+    <p class="error-text" id="visitFormError" style="display:none;"></p>
+    <button type="submit" class="btn btn-primary">Schedule it</button>
+  </form>
+
+  <h2>Upcoming</h2>
+  <div id="visitsList" class="stack"></div>
+</main>
+
+<script type="module" src="js/scheduler.js"></script>
+<script type="module" src="js/pwa.js"></script>
+</body>
+</html>
