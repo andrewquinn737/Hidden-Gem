@@ -22,24 +22,41 @@
 <body data-page="scheduler.html">
 <div id="topnav"></div>
 <main>
-  <div class="row" style="margin-bottom:1rem;">
-    <button id="connectGoogleBtn" class="btn">Connect Google Calendar</button>
-    <button id="connectAppleBtn" class="btn">Connect Apple Calendar</button>
+  <div class="row-between">
+    <div class="cal-view-tabs">
+      <button class="btn" data-view="day">Day</button>
+      <button class="btn" data-view="week">Week</button>
+      <button class="btn" data-view="month">Month</button>
+    </div>
+    <div class="row" style="gap:0.4rem;">
+      <button id="upcomingBtn" class="btn">Upcoming events</button>
+      <div style="position:relative;">
+        <button id="schedMenuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Scheduler menu">⋯</button>
+        <div id="schedMenuDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:200px; padding:0.4rem; gap:0.25rem;">
+          <button id="connectGoogleBtn" class="btn" style="width:100%; text-align:left; border:none;">Connect Google Calendar</button>
+          <button id="connectAppleBtn" class="btn" style="width:100%; text-align:left; border:none;">Connect Apple Calendar</button>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <button id="planVisitBtn" class="btn btn-primary" style="margin-bottom:1rem;">+ Plan a visit</button>
+  <div id="dayNav" class="cal-nav">
+    <button id="dayPrevBtn" class="btn">‹</button>
+    <span id="dayNavLabel" class="cal-nav-label"></span>
+    <button id="dayNextBtn" class="btn">›</button>
+  </div>
 
-  <form id="visitForm" class="card stack" style="display:none; margin-bottom:1.5rem;" data-container-id="newVisitForm">
-    <select id="visitPinSelect" required></select>
-    <input id="visitWhen" type="datetime-local" required />
-    <textarea id="visitNotes" placeholder="Notes (optional)" rows="2"></textarea>
-    <input id="visitInvitees" placeholder="Invite by username, email, or phone — comma separated" />
-    <p class="error-text" id="visitFormError" style="display:none;"></p>
-    <button type="submit" class="btn btn-primary">Schedule it</button>
-  </form>
-
-  <h2>Upcoming</h2>
-  <div id="visitsList" class="stack"></div>
+  <div id="dayView" class="cal-day-grid"></div>
+  <div id="weekView" class="cal-week-grid" style="display:none;"></div>
+  <div id="monthView" style="display:none;">
+    <div class="cal-nav">
+      <button id="monthPrevBtn" class="btn">‹</button>
+      <span id="monthNavLabel" class="cal-nav-label"></span>
+      <button id="monthNextBtn" class="btn">›</button>
+    </div>
+    <div class="cal-month-grid" id="monthGrid"></div>
+  </div>
+  <div id="upcomingView" class="stack" style="display:none;"></div>
 </main>
 
 <script type="module" src="js/scheduler.js"></script>

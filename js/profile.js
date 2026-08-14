@@ -279,17 +279,6 @@ if (session) {
 
     gridEl.innerHTML = "";
 
-    if (isOwnProfile) {
-      const addTile = document.createElement("button");
-      addTile.className = "add-pin-tile";
-      addTile.setAttribute("aria-label", "Add new pin");
-      addTile.textContent = "+";
-      addTile.addEventListener("click", () => {
-        openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
-      });
-      gridEl.appendChild(addTile);
-    }
-
     for (const pin of pins || []) {
       const cover = [...(pin.pin_photos || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
       const tile = document.createElement("button");
@@ -312,7 +301,7 @@ if (session) {
       const empty = document.createElement("p");
       empty.className = "muted";
       empty.style.gridColumn = "1 / -1";
-      empty.textContent = "No pins yet — tap + to add your first one.";
+      empty.textContent = "No pins yet — tap \"+ Add pin\" above to add your first one.";
       gridEl.appendChild(empty);
     } else if (!pins?.length) {
       const empty = document.createElement("p");
@@ -334,6 +323,9 @@ if (session) {
     document.getElementById("editProfileBtn").addEventListener("click", () => {
       dropdown.style.display = "none";
       openEditProfileModal();
+    });
+    document.getElementById("addPinBtn").addEventListener("click", () => {
+      openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
     });
   }
 
