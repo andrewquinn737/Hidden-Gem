@@ -34,15 +34,25 @@ if (session) {
   await switchView("day");
 
   function setupViewTabs() {
+    const viewModeBtn = document.getElementById("viewModeBtn");
+    const dropdown = document.getElementById("viewModeDropdown");
+    viewModeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === "none" ? "flex" : "none";
+    });
+    document.addEventListener("click", () => (dropdown.style.display = "none"));
     document.querySelectorAll("[data-view]").forEach((btn) => {
-      btn.addEventListener("click", () => switchView(btn.dataset.view));
+      btn.addEventListener("click", () => {
+        dropdown.style.display = "none";
+        switchView(btn.dataset.view);
+      });
     });
   }
 
   async function switchView(mode) {
     viewMode = mode;
     document.getElementById("upcomingView").style.display = "none";
-    document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("btn-primary", b.dataset.view === mode));
+    document.getElementById("viewModeBtn").textContent = `${mode[0].toUpperCase()}${mode.slice(1)} ▾`;
     document.getElementById("dayNav").style.display = mode === "day" ? "flex" : "none";
     document.getElementById("dayView").style.display = mode === "day" ? "block" : "none";
     document.getElementById("weekView").style.display = mode === "week" ? "grid" : "none";

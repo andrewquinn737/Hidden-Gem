@@ -20,7 +20,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="theme-color" content="#b5651d" />
 <style>
-  main.map-main { max-width: none; padding: 0; }
+  main.map-main { max-width: none; padding: 0; position: relative; }
   .map-toolbar {
     position: absolute;
     top: 4.5rem; left: 0.75rem; right: 0.75rem;
@@ -41,9 +41,17 @@
       <button type="submit" class="btn">Go</button>
     </form>
     <button id="geolocateBtn" class="btn">📍</button>
-    <button id="addPinBtn" class="btn">+ Add pin</button>
+  </div>
+  <div id="repositionBanner" class="card row-between" style="display:none; position:absolute; top:4.5rem; left:0.75rem; right:0.75rem; z-index:45;">
+    <span id="repositionLabel" class="muted"></span>
+    <div class="row" style="gap:0.4rem;">
+      <button id="repositionCancelBtn" class="btn">Cancel</button>
+      <button id="repositionConfirmBtn" class="btn btn-primary">Confirm</button>
+    </div>
   </div>
   <div id="map"></div>
+  <div id="repositionMarker" class="pin-location-marker" style="display:none; position:absolute; top:50%; left:50%; z-index:41;">📍</div>
+  <p id="holdHint" class="muted" style="position:absolute; bottom:0.5rem; left:0; right:0; text-align:center; z-index:40; font-size:0.75rem; pointer-events:none;">Hold anywhere on the map to add a pin</p>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>

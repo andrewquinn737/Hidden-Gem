@@ -23,10 +23,13 @@
 <div id="topnav"></div>
 <main>
   <div class="row-between">
-    <div class="cal-view-tabs">
-      <button class="btn" data-view="day">Day</button>
-      <button class="btn" data-view="week">Week</button>
-      <button class="btn" data-view="month">Month</button>
+    <div style="position:relative;">
+      <button id="viewModeBtn" class="btn">Day ▾</button>
+      <div id="viewModeDropdown" class="card stack" style="display:none; position:absolute; left:0; top:110%; z-index:20; min-width:120px; padding:0.4rem; gap:0.25rem;">
+        <button class="btn" data-view="day" style="width:100%; text-align:left; border:none;">Day</button>
+        <button class="btn" data-view="week" style="width:100%; text-align:left; border:none;">Week</button>
+        <button class="btn" data-view="month" style="width:100%; text-align:left; border:none;">Month</button>
+      </div>
     </div>
     <div class="row" style="gap:0.4rem;">
       <button id="upcomingBtn" class="btn">Upcoming events</button>

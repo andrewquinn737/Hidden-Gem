@@ -1,4 +1,4 @@
-import { requireSession } from "./auth.js";
+import { requireSession, signOut } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { openPinDetail } from "./pinDetailModal.js";
@@ -15,6 +15,10 @@ if (session) {
   await loadCounts();
   if (isOwnProfile) {
     document.getElementById("ownMenuArea").style.display = "block";
+    document.getElementById("addPinBtn").style.display = "inline-block";
+    document.getElementById("addPinBtn").addEventListener("click", () => {
+      openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
+    });
     await loadFriendRequests();
     setupMenu();
     setupShare();
@@ -47,6 +51,8 @@ if (session) {
       .or(`requester_id.eq.${viewingUserId},recipient_id.eq.${viewingUserId}`);
     document.getElementById("statPins").textContent = pinCount ?? 0;
     document.getElementById("statFriends").textContent = friendCount ?? 0;
+    document.getElementById("statPinsLabel").textContent = pinCount === 1 ? "pin" : "pins";
+    document.getElementById("statFriendsLabel").textContent = friendCount === 1 ? "friend" : "friends";
   }
 
   async function loadFriendRequests() {
@@ -333,9 +339,7 @@ if (session) {
       dropdown.style.display = "none";
       openEditProfileModal();
     });
-    document.getElementById("addPinBtn").addEventListener("click", () => {
-      openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
-    });
+    document.getElementById("signOutMenuBtn").addEventListener("click", signOut);
   }
 
   function openEditProfileModal() {

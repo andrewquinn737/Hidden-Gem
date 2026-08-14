@@ -1,16 +1,28 @@
 import { supabase } from "./supabaseClient.js";
 import { fetchPin, renderPostCard } from "./postCard.js";
 
+// 2/3-height modal — used by Profile's pin grid and other "quick look"
+// entry points.
 export async function openPinDetail(pinId, { onChange } = {}) {
+  await open(pinId, { onChange, backdropClass: "modal-backdrop", contentClass: "modal pin-detail-modal" });
+}
+
+// True full-screen — used from the Map's pin popup. Closing it leaves the
+// map exactly where it was (it's just an overlay, nothing navigates away).
+export async function openPinDetailFullscreen(pinId, { onChange } = {}) {
+  await open(pinId, { onChange, backdropClass: "modal-backdrop-full", contentClass: "modal-full" });
+}
+
+async function open(pinId, { onChange, backdropClass, contentClass }) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const backdrop = document.createElement("div");
-  backdrop.className = "modal-backdrop";
-  backdrop.innerHTML = `<div class="modal pin-detail-modal"><p class="muted">Loading…</p></div>`;
+  backdrop.className = backdropClass;
+  backdrop.innerHTML = `<div class="${contentClass}"><p class="muted">Loading…</p></div>`;
   document.body.appendChild(backdrop);
-  const modalEl = backdrop.querySelector(".pin-detail-modal");
+  const contentEl = backdrop.querySelector(`.${contentClass.split(" ").join(".")}`);
 
   const close = () => backdrop.remove();
   backdrop.addEventListener("click", (e) => {
@@ -19,13 +31,13 @@ export async function openPinDetail(pinId, { onChange } = {}) {
 
   const pin = await fetchPin(pinId);
   if (!pin) {
-    modalEl.innerHTML = `<p class="error-text">Pin not found, or you don't have access to it.</p><button class="btn" id="pdCloseErr">Close</button>`;
-    modalEl.querySelector("#pdCloseErr").addEventListener("click", close);
+    contentEl.innerHTML = `<p class="error-text">Pin not found, or you don't have access to it.</p><button class="btn" id="pdCloseErr">Close</button>`;
+    contentEl.querySelector("#pdCloseErr").addEventListener("click", close);
     return;
   }
 
-  modalEl.innerHTML = "";
-  await renderPostCard(pin, modalEl, {
+  contentEl.innerHTML = "";
+  await renderPostCard(pin, contentEl, {
     currentUserId: user.id,
     onChange,
     ownerMenuEnabled: true,

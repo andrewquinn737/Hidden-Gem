@@ -3,32 +3,35 @@ import { supabase } from "./supabaseClient.js";
 const MAX_PHOTOS = 5;
 const CATEGORIES = ["Camping", "Hiking", "Urban Exploring", "Cliff Jumping", "Roof", "Beach"];
 
-function ensureLeaflet() {
-  if (window.L) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    css.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=";
-    css.crossOrigin = "";
-    document.head.appendChild(css);
-
-    const script = document.createElement("script");
-    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.integrity = "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=";
-    script.crossOrigin = "";
-    script.onload = () => resolve();
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-}
-
+// lat/lng is required for a new pin (it comes from wherever the user
+// long-pressed on the map) and is not editable inline in this form —
+// changing an existing pin's location happens via the "Change location on
+// map" button below, which briefly hands off to the Map page.
 export async function openPinForm({ lat, lng, editingPin, onSaved }) {
-  await ensureLeaflet();
-
   const isEdit = !!editingPin;
-  const startLat = editingPin?.lat ?? lat;
-  const startLng = editingPin?.lng ?? lng;
+  let pinLat, pinLng;
+
+  if (isEdit) {
+    pinLat = editingPin.lat;
+    pinLng = editingPin.lng;
+  } else if (lat != null && lng != null) {
+    pinLat = lat;
+    pinLng = lng;
+  } else if (navigator.geolocation) {
+    // No location was handed in (e.g. Profile's "+ Add pin") — fall back
+    // to the device's current position rather than leaving it unset.
+    const pos = await new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve(p),
+        () => resolve(null)
+      );
+    });
+    pinLat = pos?.coords.latitude ?? 0;
+    pinLng = pos?.coords.longitude ?? 0;
+  } else {
+    pinLat = 0;
+    pinLng = 0;
+  }
 
   let existingPhotos = [];
   if (isEdit) {
@@ -63,12 +66,9 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
           </select>
         </div>
 
-        <div>
-          <label class="field-label">Location — drag the map so the pin marks the spot</label>
-          <div class="pin-location-picker">
-            <div id="pinLocationMap"></div>
-            <div class="pin-location-marker">📍</div>
-          </div>
+        <div class="row-between">
+          <span class="muted">📍 ${pinLat.toFixed(5)}, ${pinLng.toFixed(5)}</span>
+          ${isEdit ? '<button type="button" id="pinChangeLocationBtn" class="btn-link" style="padding:0;">Change location on map</button>' : ""}
         </div>
 
         <div>
@@ -110,24 +110,9 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
     if (e.target === backdrop) close();
   });
   backdrop.querySelector("#pinCancelBtn").addEventListener("click", close);
-
-  // Location picker: a fixed center-pin overlay, map pans underneath it —
-  // the chosen location is always whatever's under the pin (map center).
-  const mapEl = backdrop.querySelector("#pinLocationMap");
-  const pickerMap = L.map(mapEl, { zoomControl: false }).setView([startLat ?? 20, startLng ?? 0], startLat != null ? 15 : 2);
-  L.control.zoom({ position: "bottomright" }).addTo(pickerMap);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(pickerMap);
-  setTimeout(() => pickerMap.invalidateSize(), 50);
-
-  if (startLat == null && navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => pickerMap.setView([pos.coords.latitude, pos.coords.longitude], 14),
-      () => {}
-    );
-  }
+  backdrop.querySelector("#pinChangeLocationBtn")?.addEventListener("click", () => {
+    window.location.href = `index.html?repositionPinId=${editingPin.id}`;
+  });
 
   // New photo selection with removable previews, capped at MAX_PHOTOS total
   // (existing photos, minus any removed, plus newly added ones, plus any
@@ -339,13 +324,12 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       const directions = backdrop.querySelector("#pinDirections").value.trim() || null;
       const category = backdrop.querySelector("#pinCategory").value.trim() || null;
       const visibility = backdrop.querySelector("#pinPrivate").checked ? "private" : "public";
-      const center = pickerMap.getCenter();
 
       let pin;
       if (isEdit) {
         const { data, error: updateError } = await supabase
           .from("pins")
-          .update({ title, description, directions, category, lat: center.lat, lng: center.lng, visibility })
+          .update({ title, description, directions, category, visibility })
           .eq("id", editingPin.id)
           .select()
           .single();
@@ -360,7 +344,7 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       } else {
         const { data, error: insertError } = await supabase
           .from("pins")
-          .insert({ owner_id: user.id, title, description, directions, category, lat: center.lat, lng: center.lng, visibility })
+          .insert({ owner_id: user.id, title, description, directions, category, lat: pinLat, lng: pinLng, visibility })
           .select()
           .single();
         if (insertError) throw insertError;
