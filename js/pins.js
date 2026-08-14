@@ -3,7 +3,7 @@ import { supabase } from "./supabaseClient.js";
 
 const session = await requireSession();
 if (session) {
-  let tab = "mine"; // "mine" | "following" | "public"
+  let tab = "mine"; // "mine" | "friends" | "public"
   const tabButtons = document.querySelectorAll("[data-tab]");
   tabButtons.forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -29,11 +29,15 @@ if (session) {
       query = query.eq("owner_id", session.user.id);
     } else if (tab === "public") {
       query = query.eq("visibility", "public");
-    } else if (tab === "following") {
-      const { data: follows } = await supabase.from("follows").select("followee_id").eq("follower_id", session.user.id);
-      const ids = (follows || []).map((f) => f.followee_id);
+    } else if (tab === "friends") {
+      const { data: accepted } = await supabase
+        .from("friend_requests")
+        .select("requester_id, recipient_id")
+        .eq("status", "accepted")
+        .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
+      const ids = (accepted || []).map((r) => (r.requester_id === session.user.id ? r.recipient_id : r.requester_id));
       if (ids.length === 0) {
-        feedEl.innerHTML = '<p class="muted" style="text-align:center;">You\'re not following anyone yet.</p>';
+        feedEl.innerHTML = '<p class="muted" style="text-align:center;">You don\'t have any friends yet — add some from your profile.</p>';
         return;
       }
       query = query.in("owner_id", ids).eq("visibility", "public");

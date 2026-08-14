@@ -22,26 +22,37 @@
 <body data-page="profile.html">
 <div id="topnav"></div>
 <main class="stack">
-  <div class="row-between">
-    <div class="row">
-      <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
-      <div>
-        <strong id="profileUsername" style="font-size:1.15rem;">—</strong>
-        <div class="muted" id="profileFullName"></div>
+  <div class="row" style="align-items:flex-start;">
+    <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
+    <div style="flex:1;">
+      <div class="row-between">
+        <div>
+          <strong id="profileUsername" style="font-size:1.1rem;">—</strong>
+          <div class="muted" id="profileFullName" style="font-size:0.85rem;"></div>
+        </div>
+        <div style="position:relative;">
+          <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
+          <div id="menuDropdown" class="card" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem;">
+            <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
+          </div>
+        </div>
       </div>
-    </div>
-    <div style="position:relative;">
-      <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
-      <div id="menuDropdown" class="card" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem;">
-        <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
+      <div class="row" style="gap:1.1rem; margin-top:0.5rem;">
+        <span><strong id="statPins">0</strong> <span class="muted">pins</span></span>
+        <span><strong id="statFriends">0</strong> <span class="muted">friends</span></span>
       </div>
     </div>
   </div>
 
-  <div class="row card">
-    <div><strong id="statPins">0</strong><div class="muted">pins</div></div>
-    <div><strong id="statFollowers">0</strong><div class="muted">followers</div></div>
-    <div><strong id="statFollowing">0</strong><div class="muted">following</div></div>
+  <div id="friendRequests"></div>
+
+  <div class="card stack">
+    <h2 style="margin:0;">Find friends</h2>
+    <form id="friendSearchForm" class="row">
+      <input id="friendSearchInput" placeholder="Search by username" />
+      <button type="submit" class="btn">Search</button>
+    </form>
+    <div id="friendSearchResults" class="stack"></div>
   </div>
 
   <div id="pinsGrid" class="pins-grid"></div>

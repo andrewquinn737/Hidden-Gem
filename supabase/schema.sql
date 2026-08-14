@@ -11,6 +11,7 @@ create extension if not exists pgcrypto;
 create type public.pin_visibility as enum ('private', 'public');
 create type public.invite_status as enum ('pending', 'accepted', 'declined');
 create type public.calendar_provider as enum ('google', 'apple_caldav');
+create type public.friend_request_status as enum ('pending', 'accepted', 'declined');
 
 -- ============================================================
 -- Tables
@@ -64,13 +65,19 @@ create table public.pin_comments (
 );
 create index pin_comments_pin_id_idx on public.pin_comments(pin_id);
 
-create table public.follows (
-  follower_id uuid not null references public.profiles(id) on delete cascade,
-  followee_id uuid not null references public.profiles(id) on delete cascade,
+-- Facebook-style request/accept friends, not one-directional follows.
+create table public.friend_requests (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references public.profiles(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  status public.friend_request_status not null default 'pending',
   created_at timestamptz not null default now(),
-  primary key (follower_id, followee_id),
-  check (follower_id <> followee_id)
+  responded_at timestamptz,
+  check (requester_id <> recipient_id),
+  unique (requester_id, recipient_id)
 );
+create index friend_requests_requester_idx on public.friend_requests(requester_id);
+create index friend_requests_recipient_idx on public.friend_requests(recipient_id);
 
 create table public.pin_invites (
   id uuid primary key default gen_random_uuid(),
@@ -431,10 +438,15 @@ create policy "pin_comments_insert_self" on public.pin_comments for insert with 
 create policy "pin_comments_update_self" on public.pin_comments for update using (user_id = auth.uid());
 create policy "pin_comments_delete_self" on public.pin_comments for delete using (user_id = auth.uid());
 
-alter table public.follows enable row level security;
-create policy "follows_select_all" on public.follows for select using (true);
-create policy "follows_insert_self" on public.follows for insert with check (follower_id = auth.uid());
-create policy "follows_delete_self" on public.follows for delete using (follower_id = auth.uid());
+alter table public.friend_requests enable row level security;
+create policy "friend_requests_select_own" on public.friend_requests
+  for select using (requester_id = auth.uid() or recipient_id = auth.uid());
+create policy "friend_requests_insert_self" on public.friend_requests
+  for insert with check (requester_id = auth.uid());
+create policy "friend_requests_update_recipient_or_requester" on public.friend_requests
+  for update using (requester_id = auth.uid() or recipient_id = auth.uid());
+create policy "friend_requests_delete_own" on public.friend_requests
+  for delete using (requester_id = auth.uid() or recipient_id = auth.uid());
 
 alter table public.pin_invites enable row level security;
 create policy "pin_invites_select_own" on public.pin_invites for select using (inviter_id = auth.uid() or invitee_user_id = auth.uid());

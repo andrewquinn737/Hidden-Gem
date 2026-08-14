@@ -7,10 +7,12 @@ if (session) {
   let profileCache = null;
 
   await loadProfile();
-  await loadCounts();
+  await loadFriendsCount();
+  await loadFriendRequests();
   await loadConnections();
   await loadPinsGrid();
   setupMenu();
+  setupFriendSearch();
   setupShareAndInstall();
 
   async function loadProfile() {
@@ -24,15 +26,18 @@ if (session) {
     }
   }
 
-  async function loadCounts() {
-    const [{ count: followerCount }, { count: followingCount }, { count: pinCount }] = await Promise.all([
-      supabase.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", session.user.id),
-      supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", session.user.id),
-      supabase.from("pins").select("*", { count: "exact", head: true }).eq("owner_id", session.user.id),
-    ]);
-    document.getElementById("statFollowers").textContent = followerCount ?? 0;
-    document.getElementById("statFollowing").textContent = followingCount ?? 0;
+  async function loadFriendsCount() {
+    const { count: pinCount } = await supabase
+      .from("pins")
+      .select("*", { count: "exact", head: true })
+      .eq("owner_id", session.user.id);
+    const { count: friendCount } = await supabase
+      .from("friend_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "accepted")
+      .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
     document.getElementById("statPins").textContent = pinCount ?? 0;
+    document.getElementById("statFriends").textContent = friendCount ?? 0;
   }
 
   async function loadConnections() {
@@ -41,6 +46,110 @@ if (session) {
     const apple = data?.find((c) => c.provider === "apple_caldav");
     document.getElementById("googleStatus").textContent = google ? "Connected" : "Not connected";
     document.getElementById("appleStatus").textContent = apple ? "Connected" : "Not connected";
+  }
+
+  async function loadFriendRequests() {
+    const el = document.getElementById("friendRequests");
+    const { data: incoming } = await supabase
+      .from("friend_requests")
+      .select("id, requester_id, profiles!friend_requests_requester_id_fkey(username, avatar_url)")
+      .eq("recipient_id", session.user.id)
+      .eq("status", "pending");
+
+    if (!incoming?.length) {
+      el.innerHTML = "";
+      return;
+    }
+
+    el.innerHTML = `<div class="card stack"><h2 style="margin:0;">Friend requests</h2><div id="friendRequestsList" class="stack"></div></div>`;
+    const listEl = document.getElementById("friendRequestsList");
+    for (const req of incoming) {
+      const row = document.createElement("div");
+      row.className = "row-between";
+      row.innerHTML = `
+        <span>${escapeHtml(req.profiles?.username || "someone")}</span>
+        <div class="row" style="gap:0.4rem;">
+          <button class="btn btn-primary accept-btn">Accept</button>
+          <button class="btn decline-btn">Decline</button>
+        </div>
+      `;
+      row.querySelector(".accept-btn").addEventListener("click", async () => {
+        await supabase.from("friend_requests").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", req.id);
+        await loadFriendRequests();
+        await loadFriendsCount();
+      });
+      row.querySelector(".decline-btn").addEventListener("click", async () => {
+        await supabase.from("friend_requests").update({ status: "declined", responded_at: new Date().toISOString() }).eq("id", req.id);
+        await loadFriendRequests();
+      });
+      listEl.appendChild(row);
+    }
+  }
+
+  function setupFriendSearch() {
+    document.getElementById("friendSearchForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = document.getElementById("friendSearchInput").value.trim();
+      const resultsEl = document.getElementById("friendSearchResults");
+      resultsEl.innerHTML = "";
+      if (!q) return;
+
+      const { data: matches } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url")
+        .ilike("username", `%${q}%`)
+        .neq("id", session.user.id)
+        .limit(10);
+
+      if (!matches?.length) {
+        resultsEl.innerHTML = '<p class="muted">No one found.</p>';
+        return;
+      }
+
+      for (const person of matches) {
+        resultsEl.appendChild(await renderSearchResult(person));
+      }
+    });
+  }
+
+  async function renderSearchResult(person) {
+    const { data: existing } = await supabase
+      .from("friend_requests")
+      .select("id, requester_id, status")
+      .or(
+        `and(requester_id.eq.${session.user.id},recipient_id.eq.${person.id}),and(requester_id.eq.${person.id},recipient_id.eq.${session.user.id})`
+      )
+      .maybeSingle();
+
+    const row = document.createElement("div");
+    row.className = "row-between";
+
+    let actionHtml;
+    if (existing?.status === "accepted") {
+      actionHtml = `<span class="pill">Friends</span>`;
+    } else if (existing?.status === "pending" && existing.requester_id === session.user.id) {
+      actionHtml = `<span class="pill">Request sent</span>`;
+    } else if (existing?.status === "pending") {
+      actionHtml = `<span class="pill">Check requests above</span>`;
+    } else {
+      actionHtml = `<button class="btn btn-primary add-friend-btn">Add friend</button>`;
+    }
+
+    row.innerHTML = `<span>${escapeHtml(person.username)}</span>`;
+    row.insertAdjacentHTML("beforeend", actionHtml);
+
+    row.querySelector(".add-friend-btn")?.addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      const { error } = await supabase.from("friend_requests").insert({ requester_id: session.user.id, recipient_id: person.id });
+      if (error) {
+        alert(error.message);
+        e.target.disabled = false;
+        return;
+      }
+      e.target.outerHTML = '<span class="pill">Request sent</span>';
+    });
+
+    return row;
   }
 
   async function loadPinsGrid() {
@@ -58,7 +167,7 @@ if (session) {
     addTile.setAttribute("aria-label", "Add new pin");
     addTile.textContent = "+";
     addTile.addEventListener("click", () => {
-      openPinForm({ onSaved: loadPinsGrid });
+      openPinForm({ onSaved: () => { loadPinsGrid(); loadFriendsCount(); } });
     });
     gridEl.appendChild(addTile);
 
@@ -208,5 +317,11 @@ if (session) {
         ? 'To install: tap the Share icon in Safari, then "Add to Home Screen".'
         : 'Open your browser\'s menu and look for "Install app" or "Add to Home Screen".';
     });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
   }
 }
