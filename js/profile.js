@@ -279,15 +279,24 @@ if (session) {
 
     gridEl.innerHTML = "";
 
-    for (const pin of pins || []) {
-      const cover = [...(pin.pin_photos || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+    const covers = (pins || []).map(
+      (pin) => [...(pin.pin_photos || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0]
+    );
+    const coverPaths = covers.filter(Boolean).map((c) => c.storage_path);
+    let signedByPath = {};
+    if (coverPaths.length) {
+      const { data: signed } = await supabase.storage.from("media").createSignedUrls(coverPaths, 3600);
+      (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
+    }
+
+    (pins || []).forEach((pin, i) => {
+      const cover = covers[i];
       const tile = document.createElement("button");
       tile.title = pin.title;
 
       if (cover) {
-        const { data } = await supabase.storage.from("media").createSignedUrl(cover.storage_path, 3600);
         const img = document.createElement("img");
-        img.src = data?.signedUrl || "";
+        img.src = signedByPath[cover.storage_path] || "";
         img.alt = pin.title;
         tile.appendChild(img);
       } else {
@@ -295,7 +304,7 @@ if (session) {
       }
       tile.addEventListener("click", () => openPinDetail(pin.id, { onChange: () => { loadPinsGrid(); loadCounts(); } }));
       gridEl.appendChild(tile);
-    }
+    });
 
     if (!pins?.length && isOwnProfile) {
       const empty = document.createElement("p");

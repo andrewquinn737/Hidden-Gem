@@ -31,17 +31,22 @@ export async function requireSession() {
     window.location.href = "login.html";
     return null;
   }
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, username, full_name, avatar_url, bio")
-    .eq("id", session.user.id)
-    .single();
-  if (error || !profile) {
-    window.location.href = "login.html";
-    return null;
-  }
   renderNav();
-  return { user: session.user, profile };
+
+  // A session with no profile row is a rare edge case (nothing currently
+  // reads the profile from here — pages that need it fetch it themselves).
+  // Check it in the background instead of blocking every page load on a
+  // second network round trip just to guard against that edge case.
+  supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", session.user.id)
+    .single()
+    .then(({ data, error }) => {
+      if (error || !data) window.location.href = "login.html";
+    });
+
+  return { user: session.user };
 }
 
 export function renderNav() {

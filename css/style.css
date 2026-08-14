@@ -247,56 +247,23 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 .add-pin-tile:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ============================================================
-   Instagram-style feed (Pins tab)
+   Discover feed — a vertical list of .post-card (js/postCard.js)
    ============================================================ */
 .feed { display: flex; flex-direction: column; gap: 1.5rem; max-width: 480px; margin: 0 auto; }
-.feed-post { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.feed-post-header { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.85rem; }
-.feed-post-photo { width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--border); display: block; }
 .feed-post-photo-placeholder {
   width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
   background: var(--border); font-size: 2.5rem;
 }
-.feed-post-actions { display: flex; gap: 0.9rem; padding: 0.6rem 0.85rem 0.2rem; font-size: 1.3rem; }
-.feed-post-actions button { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); font-size: inherit; }
-.feed-post-actions button.liked { color: var(--danger); }
-.feed-post-body { padding: 0.4rem 0.85rem 0.85rem; }
-.feed-post-body .likes { font-weight: 600; }
-.feed-post-body .caption { margin: 0.3rem 0 0; }
 
 /* ============================================================
-   Pin detail modal — capped at ~2/3 viewport height, not full screen
+   Pin detail modal — the same .post-card, capped at ~2/3 viewport
+   height and scrollable as a whole, instead of a full page/screen.
    ============================================================ */
 .pin-detail-modal {
   max-height: 70vh;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
-.pin-detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 1rem 1.25rem 0.5rem;
-  flex-shrink: 0;
-}
-.pin-detail-body { padding: 0.75rem 1.25rem 1.25rem; overflow-y: auto; }
-.pin-photo-carousel {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  flex-shrink: 0;
-}
-.pin-photo-carousel img {
-  flex: 0 0 100%;
-  scroll-snap-align: start;
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  display: block;
-}
-.feed-post-actions button.liked { color: var(--accent); }
 
 /* ============================================================
    Full-screen modal (friends list) — distinct from the bottom-sheet
@@ -381,5 +348,35 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 .cal-month-cell.today { border-color: var(--accent); border-width: 2px; }
 .cal-month-daynum { font-size: 0.8rem; }
 .cal-month-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 3px; }
+
+/* ============================================================
+   Post card — shared by the Discover feed (inline) and the pin
+   detail modal (wrapped). See js/postCard.js.
+   ============================================================ */
+.post-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.post-header { display: flex; align-items: center; padding: 0.7rem 0.85rem; gap: 0.6rem; }
+.post-title { font-weight: 700; margin-right: auto; }
+.post-menu-btn, .post-close-btn {
+  background: none; border: none; font-size: 1.3rem; padding: 0.2rem 0.4rem; cursor: pointer; color: var(--text); line-height: 1;
+}
+.post-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.post-carousel img { flex: 0 0 100%; scroll-snap-align: start; width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.post-carousel .feed-post-photo-placeholder { flex: 0 0 100%; scroll-snap-align: start; }
+.post-photo-counter { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 0.3rem 0 0; }
+.post-actions { display: flex; align-items: center; gap: 0.9rem; padding: 0.5rem 0.85rem; font-size: 1.2rem; }
+.post-actions button, .post-actions a { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); font-size: inherit; text-decoration: none; }
+.post-actions button.liked { color: var(--accent); }
+.post-map-btn { margin-left: auto; }
+.post-body { padding: 0.3rem 0.85rem 0.85rem; }
+.post-description { margin: 0; white-space: pre-wrap; }
+.post-description.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; margin-top: 0.2rem; }
+.post-full-details { margin-top: 0.6rem; }
+.post-comments-section { padding: 0 0.85rem 0.85rem; }
 
 .error-text { color: var(--danger); font-size: 0.9rem; }

@@ -74,7 +74,18 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
         <div>
           <label class="field-label">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
           <div id="pinPhotoPreviews" class="photo-grid" style="margin-bottom:0.5rem;"></div>
-          <input id="pinPhotosInput" type="file" accept="image/*" multiple />
+          <div id="pinPhotoDropzone" class="stack" style="border:2px dashed var(--border); border-radius: var(--radius); padding:0.75rem; text-align:center;">
+            <input id="pinPhotosInput" type="file" accept="image/*" multiple />
+            <p class="muted" style="margin:0; font-size:0.8rem;" id="pinDropHint"></p>
+            <button type="button" id="pinChooseExistingBtn" class="btn">Choose from your photos</button>
+          </div>
+          <div id="pinExistingPicker" class="stack" style="display:none; margin-top:0.5rem;">
+            <div id="pinExistingPickerGrid" class="photo-grid"></div>
+            <div class="row">
+              <button type="button" id="pinExistingPickerCancel" class="btn" style="flex:1;">Cancel</button>
+              <button type="button" id="pinExistingPickerAdd" class="btn btn-primary" style="flex:1;">Add selected</button>
+            </div>
+          </div>
         </div>
 
         <label class="row">
@@ -119,14 +130,48 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   }
 
   // New photo selection with removable previews, capped at MAX_PHOTOS total
-  // (existing photos, minus any removed, plus newly added ones).
+  // (existing photos, minus any removed, plus newly added ones, plus any
+  // reused from the user's other pins).
   let photoFiles = [];
+  let reusedPhotoPaths = []; // storage paths picked from "Choose from your photos"
   const photosInput = backdrop.querySelector("#pinPhotosInput");
   const previewsEl = backdrop.querySelector("#pinPhotoPreviews");
+  const dropzone = backdrop.querySelector("#pinPhotoDropzone");
+  const dropHint = backdrop.querySelector("#pinDropHint");
+  if (document.documentElement.classList.contains("is-desktop-device")) {
+    dropHint.textContent = "Drag photos here, or:";
+  }
 
   function slotsUsed() {
-    return existingPhotos.length + photoFiles.length;
+    return existingPhotos.length + photoFiles.length + reusedPhotoPaths.length;
   }
+
+  function addFiles(fileList) {
+    const incoming = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+    const room = MAX_PHOTOS - slotsUsed();
+    if (incoming.length > room) {
+      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${Math.max(room, 0)} of your new selection were added.`);
+    }
+    photoFiles = photoFiles.concat(incoming.slice(0, Math.max(room, 0)));
+    renderPreviews();
+  }
+
+  ["dragover", "dragenter"].forEach((evt) =>
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = "var(--accent)";
+    })
+  );
+  ["dragleave", "dragend"].forEach((evt) =>
+    dropzone.addEventListener(evt, () => {
+      dropzone.style.borderColor = "var(--border)";
+    })
+  );
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = "var(--border)";
+    addFiles(e.dataTransfer?.files);
+  });
 
   async function renderPreviews() {
     previewsEl.innerHTML = "";
@@ -145,6 +190,26 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       removeBtn.addEventListener("click", () => {
         removedPhotoIds.push(photo.id);
         existingPhotos = existingPhotos.filter((p) => p.id !== photo.id);
+        renderPreviews();
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(removeBtn);
+      previewsEl.appendChild(wrap);
+    }
+
+    for (const path of reusedPhotoPaths) {
+      const wrap = document.createElement("div");
+      wrap.style.position = "relative";
+      const img = document.createElement("img");
+      const { data } = await supabase.storage.from("media").createSignedUrl(path, 3600);
+      img.src = data?.signedUrl || "";
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.style.cssText =
+        "position:absolute; top:2px; right:2px; width:20px; height:20px; padding:0; line-height:1; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; border:none;";
+      removeBtn.addEventListener("click", () => {
+        reusedPhotoPaths = reusedPhotoPaths.filter((p) => p !== path);
         renderPreviews();
       });
       wrap.appendChild(img);
@@ -182,13 +247,78 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   await renderPreviews();
 
   photosInput.addEventListener("change", () => {
-    const incoming = Array.from(photosInput.files || []);
-    const room = MAX_PHOTOS - slotsUsed();
-    if (incoming.length > room) {
-      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${Math.max(room, 0)} of your new selection were added.`);
-    }
-    photoFiles = photoFiles.concat(incoming.slice(0, Math.max(room, 0)));
+    addFiles(photosInput.files);
     photosInput.value = "";
+  });
+
+  // "Choose from your photos" — reuse a photo already uploaded to one of
+  // your other pins, without re-uploading it from your device.
+  const chooseExistingBtn = backdrop.querySelector("#pinChooseExistingBtn");
+  const existingPicker = backdrop.querySelector("#pinExistingPicker");
+  const existingPickerGrid = backdrop.querySelector("#pinExistingPickerGrid");
+  let pickerSelected = new Set();
+
+  chooseExistingBtn.addEventListener("click", async () => {
+    existingPicker.style.display = existingPicker.style.display === "none" ? "flex" : "none";
+    if (existingPicker.style.display === "none") return;
+
+    existingPickerGrid.innerHTML = '<p class="muted">Loading…</p>';
+    pickerSelected = new Set();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: myPhotos } = await supabase
+      .from("pin_photos")
+      .select("id, storage_path, pins!inner(owner_id)")
+      .eq("pins.owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (!myPhotos?.length) {
+      existingPickerGrid.innerHTML = '<p class="muted">You haven\'t uploaded any photos yet.</p>';
+      return;
+    }
+
+    const { data: signed } = await supabase.storage.from("media").createSignedUrls(
+      myPhotos.map((p) => p.storage_path),
+      3600
+    );
+    const signedByPath = {};
+    (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
+
+    existingPickerGrid.innerHTML = "";
+    myPhotos.forEach((photo) => {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; cursor:pointer; border-radius:8px; overflow:hidden;";
+      const img = document.createElement("img");
+      img.src = signedByPath[photo.storage_path] || "";
+      img.style.cssText = "width:100%; aspect-ratio:1; object-fit:cover; display:block;";
+      wrap.appendChild(img);
+      wrap.addEventListener("click", () => {
+        if (pickerSelected.has(photo.storage_path)) {
+          pickerSelected.delete(photo.storage_path);
+          wrap.style.outline = "none";
+        } else {
+          pickerSelected.add(photo.storage_path);
+          wrap.style.outline = "3px solid var(--accent)";
+        }
+      });
+      existingPickerGrid.appendChild(wrap);
+    });
+  });
+
+  backdrop.querySelector("#pinExistingPickerCancel").addEventListener("click", () => {
+    existingPicker.style.display = "none";
+  });
+  backdrop.querySelector("#pinExistingPickerAdd").addEventListener("click", () => {
+    const room = MAX_PHOTOS - slotsUsed();
+    const picked = Array.from(pickerSelected);
+    if (picked.length > room) {
+      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${Math.max(room, 0)} selected were added.`);
+    }
+    reusedPhotoPaths = reusedPhotoPaths.concat(picked.slice(0, Math.max(room, 0)));
+    existingPicker.style.display = "none";
     renderPreviews();
   });
 
@@ -242,6 +372,18 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
         const { error: uploadError } = await supabase.storage.from("media").upload(path, file);
         if (uploadError) throw uploadError;
         await supabase.from("pin_photos").insert({ pin_id: pin.id, storage_path: path });
+      }
+
+      // Reused photos are copied server-side into this pin's own storage
+      // path rather than re-uploaded — cheap, and keeps storage RLS (which
+      // is scoped by the pin id embedded in the path) correctly matching
+      // *this* pin's own visibility instead of the pin the photo came from.
+      for (let i = 0; i < reusedPhotoPaths.length; i++) {
+        const ext = reusedPhotoPaths[i].split(".").pop();
+        const newPath = `pins/${pin.id}/${Date.now()}-reused-${i}.${ext}`;
+        const { error: copyError } = await supabase.storage.from("media").copy(reusedPhotoPaths[i], newPath);
+        if (copyError) throw copyError;
+        await supabase.from("pin_photos").insert({ pin_id: pin.id, storage_path: newPath });
       }
 
       if (!isEdit) {
