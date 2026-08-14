@@ -197,6 +197,14 @@ as $$
         join public.visits v on v.id = vp.visit_id
         where v.pin_id = p.id and vp.user_id = auth.uid()
       )
+      or exists (
+        select 1 from public.friend_requests fr
+        where fr.status = 'accepted'
+        and (
+          (fr.requester_id = auth.uid() and fr.recipient_id = p.owner_id)
+          or (fr.recipient_id = auth.uid() and fr.requester_id = p.owner_id)
+        )
+      )
     )
   );
 $$;
@@ -415,6 +423,14 @@ create policy "pins_select" on public.pins for select using (
     select 1 from public.visit_participants vp
     join public.visits v on v.id = vp.visit_id
     where v.pin_id = pins.id and vp.user_id = auth.uid()
+  )
+  or exists (
+    select 1 from public.friend_requests fr
+    where fr.status = 'accepted'
+    and (
+      (fr.requester_id = auth.uid() and fr.recipient_id = pins.owner_id)
+      or (fr.recipient_id = auth.uid() and fr.requester_id = pins.owner_id)
+    )
   )
 );
 create policy "pins_insert_self" on public.pins for insert with check (owner_id = auth.uid());

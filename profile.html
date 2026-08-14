@@ -32,8 +32,9 @@
         </div>
         <div style="position:relative;">
           <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
-          <div id="menuDropdown" class="card" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem;">
+          <div id="menuDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem; gap:0.25rem;">
             <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
+            <button id="shareAppBtn" class="btn" style="width:100%; text-align:left; border:none;">Share app</button>
           </div>
         </div>
       </div>
@@ -56,23 +57,7 @@
   </div>
 
   <div id="pinsGrid" class="pins-grid"></div>
-
-  <div class="card stack">
-    <h2 style="margin:0;">Calendars</h2>
-    <div class="row-between"><span>Google Calendar</span><span id="googleStatus" class="pill">—</span></div>
-    <div class="row-between"><span>Apple Calendar</span><span id="appleStatus" class="pill">—</span></div>
-    <p class="muted">Manage connections from the Scheduler tab.</p>
-  </div>
-
-  <div class="card stack">
-    <h2 style="margin:0;">Share Hidden Gem</h2>
-    <p class="muted" style="margin:0;">Invite someone else to start marking their own spots.</p>
-    <div class="row">
-      <button id="shareAppBtn" class="btn btn-primary" style="flex:1;">Share app</button>
-      <button id="installAppBtn" class="btn" style="flex:1;">Install app</button>
-    </div>
-    <p id="shareStatus" class="muted" style="display:none;"></p>
-  </div>
+  <p id="shareStatus" class="muted" style="display:none;"></p>
 </main>
 
 <script type="module" src="js/profile.js"></script>

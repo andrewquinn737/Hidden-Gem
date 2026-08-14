@@ -9,11 +9,10 @@ if (session) {
   await loadProfile();
   await loadFriendsCount();
   await loadFriendRequests();
-  await loadConnections();
   await loadPinsGrid();
   setupMenu();
   setupFriendSearch();
-  setupShareAndInstall();
+  setupShare();
 
   async function loadProfile() {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
@@ -38,14 +37,6 @@ if (session) {
       .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
     document.getElementById("statPins").textContent = pinCount ?? 0;
     document.getElementById("statFriends").textContent = friendCount ?? 0;
-  }
-
-  async function loadConnections() {
-    const { data } = await supabase.rpc("get_my_calendar_connections");
-    const google = data?.find((c) => c.provider === "google");
-    const apple = data?.find((c) => c.provider === "apple_caldav");
-    document.getElementById("googleStatus").textContent = google ? "Connected" : "Not connected";
-    document.getElementById("appleStatus").textContent = apple ? "Connected" : "Not connected";
   }
 
   async function loadFriendRequests() {
@@ -203,7 +194,7 @@ if (session) {
     const dropdown = document.getElementById("menuDropdown");
     menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
+      dropdown.style.display = dropdown.style.display === "none" ? "flex" : "none";
     });
     document.addEventListener("click", () => (dropdown.style.display = "none"));
     document.getElementById("editProfileBtn").addEventListener("click", () => {
@@ -275,16 +266,14 @@ if (session) {
     });
   }
 
-  function setupShareAndInstall() {
+  function setupShare() {
     const shareBtn = document.getElementById("shareAppBtn");
-    const installBtn = document.getElementById("installAppBtn");
+    const dropdown = document.getElementById("menuDropdown");
     const statusEl = document.getElementById("shareStatus");
 
-    const isStandalone =
-      window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
-    if (isStandalone) installBtn.style.display = "none";
-
-    shareBtn.addEventListener("click", async () => {
+    shareBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = "none";
       const shareData = {
         title: "Hidden Gem",
         text: "Find it. Mark it. Share it. Join me on Hidden Gem.",
@@ -301,21 +290,6 @@ if (session) {
         statusEl.textContent = "Link copied to clipboard.";
         statusEl.style.display = "block";
       }
-    });
-
-    installBtn.addEventListener("click", async () => {
-      const deferred = window.__deferredInstallPrompt;
-      if (deferred) {
-        deferred.prompt();
-        await deferred.userChoice;
-        window.__deferredInstallPrompt = null;
-        return;
-      }
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      statusEl.style.display = "block";
-      statusEl.textContent = isIOS
-        ? 'To install: tap the Share icon in Safari, then "Add to Home Screen".'
-        : 'Open your browser\'s menu and look for "Install app" or "Add to Home Screen".';
     });
   }
 

@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient.js";
 
 const MAX_PHOTOS = 5;
+const CATEGORIES = ["Camping", "Hiking", "Urban Exploring", "Cliff Jumping", "Roof", "Beach"];
 
 function ensureLeaflet() {
   if (window.L) return Promise.resolve();
@@ -31,13 +32,28 @@ export async function openPinForm({ lat, lng, onSaved }) {
     <div class="modal stack">
       <h2 style="margin:0;">New pin</h2>
       <form id="pinForm" class="stack">
-        <input id="pinTitle" placeholder="What's this place called?" required maxlength="120" />
-        <textarea id="pinDescription" placeholder="What makes this spot worth finding?" rows="2"></textarea>
-        <textarea id="pinDirections" placeholder="How do you get there?" rows="2"></textarea>
-        <input id="pinCategory" placeholder="Category (viewpoint, waterfall, ruins…)" maxlength="60" />
+        <div>
+          <label class="field-label" for="pinTitle">Name</label>
+          <input id="pinTitle" required maxlength="120" />
+        </div>
+        <div>
+          <label class="field-label" for="pinDescription">Description</label>
+          <textarea id="pinDescription" rows="2"></textarea>
+        </div>
+        <div>
+          <label class="field-label" for="pinDirections">How to get there</label>
+          <textarea id="pinDirections" rows="2"></textarea>
+        </div>
+        <div>
+          <label class="field-label" for="pinCategory">Category</label>
+          <select id="pinCategory">
+            <option value="">Choose a category…</option>
+            ${CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("")}
+          </select>
+        </div>
 
         <div>
-          <label class="muted" style="font-size:0.85rem;">Location — drag the map so the pin marks the spot</label>
+          <label class="field-label">Location — drag the map so the pin marks the spot</label>
           <div class="pin-location-picker">
             <div id="pinLocationMap"></div>
             <div class="pin-location-marker">📍</div>
@@ -45,14 +61,14 @@ export async function openPinForm({ lat, lng, onSaved }) {
         </div>
 
         <div>
-          <label class="muted" style="font-size:0.85rem;">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
+          <label class="field-label">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
           <input id="pinPhotosInput" type="file" accept="image/*" multiple />
           <div id="pinPhotoPreviews" class="photo-grid" style="margin-top:0.5rem;"></div>
         </div>
 
         <label class="row">
-          <input type="checkbox" id="pinPublic" style="width:auto;" />
-          <span>Make this pin public</span>
+          <input type="checkbox" id="pinPrivate" style="width:auto;" />
+          <span>Make this pin private</span>
         </label>
 
         <p class="error-text" id="pinFormError" style="display:none;"></p>
@@ -152,7 +168,7 @@ export async function openPinForm({ lat, lng, onSaved }) {
       const description = backdrop.querySelector("#pinDescription").value.trim() || null;
       const directions = backdrop.querySelector("#pinDirections").value.trim() || null;
       const category = backdrop.querySelector("#pinCategory").value.trim() || null;
-      const visibility = backdrop.querySelector("#pinPublic").checked ? "public" : "private";
+      const visibility = backdrop.querySelector("#pinPrivate").checked ? "private" : "public";
       const center = pickerMap.getCenter();
 
       const { data: pin, error: insertError } = await supabase
