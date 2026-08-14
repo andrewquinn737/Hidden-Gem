@@ -52,7 +52,7 @@ if (session) {
         ${pin.directions ? `<div class="card"><strong>How to get there</strong><p style="margin:0.35rem 0 0;">${escapeHtml(pin.directions)}</p></div>` : ""}
 
         <div class="row">
-          <button id="likeBtn" class="btn ${myLike ? "btn-primary" : ""}">❤ ${likes?.length ?? 0}</button>
+          <button id="likeBtn" class="btn ${myLike ? "btn-primary" : ""}">${myLike ? "👍" : "👍🏻"} ${likes?.length ?? 0}</button>
           <a href="scheduler.html?pinId=${pin.id}" class="btn">📅 Plan a visit</a>
           <button id="shareBtn" class="btn">🔗 Share</button>
           ${isOwner ? '<button id="deleteBtn" class="btn btn-danger">Delete</button>' : ""}

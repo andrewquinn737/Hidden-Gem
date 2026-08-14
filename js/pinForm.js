@@ -23,32 +23,43 @@ function ensureLeaflet() {
   });
 }
 
-export async function openPinForm({ lat, lng, onSaved }) {
+export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   await ensureLeaflet();
+
+  const isEdit = !!editingPin;
+  const startLat = editingPin?.lat ?? lat;
+  const startLng = editingPin?.lng ?? lng;
+
+  let existingPhotos = [];
+  if (isEdit) {
+    const { data } = await supabase.from("pin_photos").select("id, storage_path, created_at").eq("pin_id", editingPin.id).order("created_at", { ascending: true });
+    existingPhotos = data || [];
+  }
+  let removedPhotoIds = [];
 
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.innerHTML = `
     <div class="modal stack">
-      <h2 style="margin:0;">New pin</h2>
+      <h2 style="margin:0;">${isEdit ? "Edit pin" : "New pin"}</h2>
       <form id="pinForm" class="stack">
         <div>
           <label class="field-label" for="pinTitle">Name</label>
-          <input id="pinTitle" required maxlength="120" />
+          <input id="pinTitle" required maxlength="120" value="${attr(editingPin?.title)}" />
         </div>
         <div>
           <label class="field-label" for="pinDescription">Description</label>
-          <textarea id="pinDescription" rows="2"></textarea>
+          <textarea id="pinDescription" rows="2">${escapeHtml(editingPin?.description)}</textarea>
         </div>
         <div>
           <label class="field-label" for="pinDirections">How to get there</label>
-          <textarea id="pinDirections" rows="2"></textarea>
+          <textarea id="pinDirections" rows="2">${escapeHtml(editingPin?.directions)}</textarea>
         </div>
         <div>
           <label class="field-label" for="pinCategory">Category</label>
           <select id="pinCategory">
             <option value="">Choose a category…</option>
-            ${CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("")}
+            ${CATEGORIES.map((c) => `<option value="${c}" ${editingPin?.category === c ? "selected" : ""}>${c}</option>`).join("")}
           </select>
         </div>
 
@@ -62,12 +73,12 @@ export async function openPinForm({ lat, lng, onSaved }) {
 
         <div>
           <label class="field-label">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
+          <div id="pinPhotoPreviews" class="photo-grid" style="margin-bottom:0.5rem;"></div>
           <input id="pinPhotosInput" type="file" accept="image/*" multiple />
-          <div id="pinPhotoPreviews" class="photo-grid" style="margin-top:0.5rem;"></div>
         </div>
 
         <label class="row">
-          <input type="checkbox" id="pinPrivate" style="width:auto;" />
+          <input type="checkbox" id="pinPrivate" style="width:auto;" ${editingPin?.visibility === "private" ? "checked" : ""} />
           <span>Make this pin private</span>
         </label>
 
@@ -76,7 +87,7 @@ export async function openPinForm({ lat, lng, onSaved }) {
 
         <div class="row">
           <button type="button" id="pinCancelBtn" class="btn" style="flex:1;">Cancel</button>
-          <button type="submit" class="btn btn-primary" style="flex:1;">Save pin</button>
+          <button type="submit" class="btn btn-primary" style="flex:1;">${isEdit ? "Save changes" : "Save pin"}</button>
         </div>
       </form>
     </div>
@@ -92,7 +103,7 @@ export async function openPinForm({ lat, lng, onSaved }) {
   // Location picker: a fixed center-pin overlay, map pans underneath it —
   // the chosen location is always whatever's under the pin (map center).
   const mapEl = backdrop.querySelector("#pinLocationMap");
-  const pickerMap = L.map(mapEl, { zoomControl: false }).setView([lat ?? 20, lng ?? 0], lat != null ? 15 : 2);
+  const pickerMap = L.map(mapEl, { zoomControl: false }).setView([startLat ?? 20, startLng ?? 0], startLat != null ? 15 : 2);
   L.control.zoom({ position: "bottomright" }).addTo(pickerMap);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -100,20 +111,47 @@ export async function openPinForm({ lat, lng, onSaved }) {
   }).addTo(pickerMap);
   setTimeout(() => pickerMap.invalidateSize(), 50);
 
-  if (lat == null && navigator.geolocation) {
+  if (startLat == null && navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (pos) => pickerMap.setView([pos.coords.latitude, pos.coords.longitude], 14),
       () => {}
     );
   }
 
-  // Photo selection with removable previews, capped at MAX_PHOTOS
+  // New photo selection with removable previews, capped at MAX_PHOTOS total
+  // (existing photos, minus any removed, plus newly added ones).
   let photoFiles = [];
   const photosInput = backdrop.querySelector("#pinPhotosInput");
   const previewsEl = backdrop.querySelector("#pinPhotoPreviews");
 
-  function renderPreviews() {
+  function slotsUsed() {
+    return existingPhotos.length + photoFiles.length;
+  }
+
+  async function renderPreviews() {
     previewsEl.innerHTML = "";
+
+    for (const photo of existingPhotos) {
+      const wrap = document.createElement("div");
+      wrap.style.position = "relative";
+      const img = document.createElement("img");
+      const { data } = await supabase.storage.from("media").createSignedUrl(photo.storage_path, 3600);
+      img.src = data?.signedUrl || "";
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.style.cssText =
+        "position:absolute; top:2px; right:2px; width:20px; height:20px; padding:0; line-height:1; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; border:none;";
+      removeBtn.addEventListener("click", () => {
+        removedPhotoIds.push(photo.id);
+        existingPhotos = existingPhotos.filter((p) => p.id !== photo.id);
+        renderPreviews();
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(removeBtn);
+      previewsEl.appendChild(wrap);
+    }
+
     photoFiles.forEach((file, i) => {
       const wrap = document.createElement("div");
       wrap.style.position = "relative";
@@ -130,24 +168,26 @@ export async function openPinForm({ lat, lng, onSaved }) {
       });
       wrap.appendChild(img);
       wrap.appendChild(removeBtn);
-      if (i === 0) {
-        const badge = document.createElement("span");
-        badge.textContent = "cover";
-        badge.className = "pill";
-        badge.style.cssText = "position:absolute; bottom:2px; left:2px; background:var(--surface);";
-        wrap.appendChild(badge);
-      }
       previewsEl.appendChild(wrap);
     });
+
+    if (previewsEl.firstElementChild) {
+      const coverBadge = document.createElement("span");
+      coverBadge.textContent = "cover";
+      coverBadge.className = "pill";
+      coverBadge.style.cssText = "position:absolute; bottom:2px; left:2px; background:var(--surface);";
+      previewsEl.firstElementChild.appendChild(coverBadge);
+    }
   }
+  await renderPreviews();
 
   photosInput.addEventListener("change", () => {
     const incoming = Array.from(photosInput.files || []);
-    const room = MAX_PHOTOS - photoFiles.length;
+    const room = MAX_PHOTOS - slotsUsed();
     if (incoming.length > room) {
-      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${room} of your new selection were added.`);
+      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${Math.max(room, 0)} of your new selection were added.`);
     }
-    photoFiles = photoFiles.concat(incoming.slice(0, room));
+    photoFiles = photoFiles.concat(incoming.slice(0, Math.max(room, 0)));
     photosInput.value = "";
     renderPreviews();
   });
@@ -171,21 +211,31 @@ export async function openPinForm({ lat, lng, onSaved }) {
       const visibility = backdrop.querySelector("#pinPrivate").checked ? "private" : "public";
       const center = pickerMap.getCenter();
 
-      const { data: pin, error: insertError } = await supabase
-        .from("pins")
-        .insert({
-          owner_id: user.id,
-          title,
-          description,
-          directions,
-          category,
-          lat: center.lat,
-          lng: center.lng,
-          visibility,
-        })
-        .select()
-        .single();
-      if (insertError) throw insertError;
+      let pin;
+      if (isEdit) {
+        const { data, error: updateError } = await supabase
+          .from("pins")
+          .update({ title, description, directions, category, lat: center.lat, lng: center.lng, visibility })
+          .eq("id", editingPin.id)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+        pin = data;
+
+        for (const photoId of removedPhotoIds) {
+          const photo = editingPin.id && (await supabase.from("pin_photos").select("storage_path").eq("id", photoId).single()).data;
+          if (photo) await supabase.storage.from("media").remove([photo.storage_path]);
+          await supabase.from("pin_photos").delete().eq("id", photoId);
+        }
+      } else {
+        const { data, error: insertError } = await supabase
+          .from("pins")
+          .insert({ owner_id: user.id, title, description, directions, category, lat: center.lat, lng: center.lng, visibility })
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        pin = data;
+      }
 
       for (const file of photoFiles) {
         const path = `pins/${pin.id}/${Date.now()}-${file.name}`;
@@ -194,22 +244,37 @@ export async function openPinForm({ lat, lng, onSaved }) {
         await supabase.from("pin_photos").insert({ pin_id: pin.id, storage_path: path });
       }
 
-      const { data: invite } = await supabase
-        .from("pin_invites")
-        .insert({ pin_id: pin.id, inviter_id: user.id })
-        .select()
-        .single();
-      if (invite) {
-        shareEl.textContent = `Share link: ${window.location.origin}/invite.html?token=${invite.token}`;
-        shareEl.style.display = "block";
+      if (!isEdit) {
+        const { data: invite } = await supabase
+          .from("pin_invites")
+          .insert({ pin_id: pin.id, inviter_id: user.id })
+          .select()
+          .single();
+        if (invite) {
+          shareEl.textContent = `Share link: ${window.location.origin}/invite.html?token=${invite.token}`;
+          shareEl.style.display = "block";
+        }
+        onSaved?.(pin);
+        setTimeout(close, invite ? 1800 : 0);
+      } else {
+        onSaved?.(pin);
+        close();
       }
-
-      onSaved?.(pin);
-      setTimeout(close, invite ? 1800 : 0);
     } catch (err) {
       errorEl.textContent = err.message || "Couldn't save that pin.";
       errorEl.style.display = "block";
       submitBtn.disabled = false;
     }
   });
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function attr(str) {
+  return escapeHtml(str).replace(/"/g, "&quot;");
 }

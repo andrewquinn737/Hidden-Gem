@@ -30,31 +30,23 @@
           <strong id="profileUsername" style="font-size:1.1rem;">—</strong>
           <div class="muted" id="profileFullName" style="font-size:0.85rem;"></div>
         </div>
-        <div style="position:relative;">
+        <div id="ownMenuArea" style="position:relative; display:none;">
           <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
           <div id="menuDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem; gap:0.25rem;">
             <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
             <button id="shareAppBtn" class="btn" style="width:100%; text-align:left; border:none;">Share app</button>
           </div>
         </div>
+        <div id="friendActionArea"></div>
       </div>
       <div class="row" style="gap:1.1rem; margin-top:0.5rem;">
         <span><strong id="statPins">0</strong> <span class="muted">pins</span></span>
-        <span><strong id="statFriends">0</strong> <span class="muted">friends</span></span>
+        <button id="friendsCountBtn" class="btn-link" style="padding:0;"><strong id="statFriends">0</strong> <span class="muted">friends</span></button>
       </div>
     </div>
   </div>
 
   <div id="friendRequests"></div>
-
-  <div class="card stack">
-    <h2 style="margin:0;">Find friends</h2>
-    <form id="friendSearchForm" class="row">
-      <input id="friendSearchInput" placeholder="Search by username" />
-      <button type="submit" class="btn">Search</button>
-    </form>
-    <div id="friendSearchResults" class="stack"></div>
-  </div>
 
   <div id="pinsGrid" class="pins-grid"></div>
   <p id="shareStatus" class="muted" style="display:none;"></p>

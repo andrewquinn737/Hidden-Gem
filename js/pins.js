@@ -1,55 +1,31 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
+import { openPinDetail } from "./pinDetailModal.js";
 
 const session = await requireSession();
 if (session) {
-  let tab = "mine"; // "mine" | "friends" | "public"
-  const tabButtons = document.querySelectorAll("[data-tab]");
-  tabButtons.forEach((btn) =>
-    btn.addEventListener("click", () => {
-      tab = btn.dataset.tab;
-      tabButtons.forEach((b) => b.classList.toggle("btn-primary", b === btn));
-      loadFeed();
-    })
-  );
-  tabButtons[0]?.classList.add("btn-primary");
+  await loadFeed();
 
   async function loadFeed() {
     const feedEl = document.getElementById("feed");
     feedEl.innerHTML = '<p class="muted">Loading…</p>';
 
-    let query = supabase
+    // No filters here on purpose — RLS already returns exactly what this
+    // user is allowed to see: their own pins, friends' pins, and public
+    // pins from anyone. This is the whole "Discover" feed.
+    const { data: pins, error } = await supabase
       .from("pins")
       .select(
         "id, title, description, category, owner_id, created_at, pin_photos(storage_path, created_at), pin_likes(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)"
       )
       .order("created_at", { ascending: false });
 
-    if (tab === "mine") {
-      query = query.eq("owner_id", session.user.id);
-    } else if (tab === "public") {
-      query = query.eq("visibility", "public");
-    } else if (tab === "friends") {
-      const { data: accepted } = await supabase
-        .from("friend_requests")
-        .select("requester_id, recipient_id")
-        .eq("status", "accepted")
-        .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
-      const ids = (accepted || []).map((r) => (r.requester_id === session.user.id ? r.recipient_id : r.requester_id));
-      if (ids.length === 0) {
-        feedEl.innerHTML = '<p class="muted" style="text-align:center;">You don\'t have any friends yet — add some from your profile.</p>';
-        return;
-      }
-      query = query.in("owner_id", ids).eq("visibility", "public");
-    }
-
-    const { data: pins, error } = await query;
     if (error) {
       feedEl.innerHTML = `<p class="error-text">${error.message}</p>`;
       return;
     }
     if (!pins.length) {
-      feedEl.innerHTML = '<p class="muted" style="text-align:center;">No pins here yet.</p>';
+      feedEl.innerHTML = '<p class="muted" style="text-align:center;">No pins to discover yet.</p>';
       return;
     }
 
@@ -78,9 +54,9 @@ if (session) {
     let photoHtml;
     if (cover) {
       const { data } = await supabase.storage.from("media").createSignedUrl(cover.storage_path, 3600);
-      photoHtml = `<a href="pin.html?id=${pin.id}"><img class="feed-post-photo" src="${data?.signedUrl || ""}" alt="${escapeHtml(pin.title)}" /></a>`;
+      photoHtml = `<img class="feed-post-photo pin-open-target" src="${data?.signedUrl || ""}" alt="${escapeHtml(pin.title)}" />`;
     } else {
-      photoHtml = `<a href="pin.html?id=${pin.id}"><div class="feed-post-photo-placeholder">🗺️</div></a>`;
+      photoHtml = `<div class="feed-post-photo-placeholder pin-open-target">🗺️</div>`;
     }
 
     post.innerHTML = `
@@ -91,16 +67,18 @@ if (session) {
       </div>
       ${photoHtml}
       <div class="feed-post-actions">
-        <button class="like-btn ${iLiked ? "liked" : ""}" data-pin-id="${pin.id}">${iLiked ? "❤" : "🤍"}</button>
-        <a href="pin.html?id=${pin.id}" style="color:inherit;">💬</a>
+        <button class="like-btn ${iLiked ? "liked" : ""}" data-pin-id="${pin.id}">${iLiked ? "👍" : "👍🏻"} ${likeCount}</button>
+        <button class="comments-open-target">💬 ${commentCount}</button>
       </div>
       <div class="feed-post-body">
-        <p class="likes">${likeCount} ${likeCount === 1 ? "like" : "likes"}</p>
-        <p class="caption"><strong>${escapeHtml(owner?.username || "someone")}</strong> <a href="pin.html?id=${pin.id}" style="color:inherit;">${escapeHtml(pin.title)}</a></p>
+        <p class="caption"><strong>${escapeHtml(owner?.username || "someone")}</strong> <button class="btn-link pin-open-target" style="padding:0; color:inherit;">${escapeHtml(pin.title)}</button></p>
         ${pin.description ? `<p class="caption muted">${escapeHtml(pin.description)}</p>` : ""}
-        ${commentCount ? `<a href="pin.html?id=${pin.id}" class="muted" style="font-size:0.9rem;">View all ${commentCount} comments</a>` : ""}
       </div>
     `;
+
+    post.querySelectorAll(".pin-open-target, .comments-open-target").forEach((el) => {
+      el.addEventListener("click", () => openPinDetail(pin.id, { onChange: loadFeed }));
+    });
 
     post.querySelector(".like-btn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
@@ -121,6 +99,4 @@ if (session) {
     div.textContent = str;
     return div.innerHTML;
   }
-
-  await loadFeed();
 }

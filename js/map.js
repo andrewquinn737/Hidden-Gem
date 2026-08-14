@@ -1,6 +1,7 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
+import { openPinDetail } from "./pinDetailModal.js";
 import { searchPlace } from "./geo.js";
 
 const session = await requireSession();
@@ -34,12 +35,17 @@ if (session) {
         `<strong>${escapeHtml(pin.title)}</strong><br/>
          <span class="muted">${escapeHtml(pin.category || "")}</span><br/>
          ${isMine ? '<span class="pill">yours</span>' : ""} ${pin.visibility === "public" ? '<span class="pill">public</span>' : ""}<br/>
-         <a href="pin.html?id=${pin.id}">View pin →</a>`
+         <button class="btn-link view-pin-btn" data-pin-id="${pin.id}" style="padding:0;">View pin →</button>`
       );
       markers.push(marker);
     }
   }
   await loadPins();
+
+  map.on("popupopen", (e) => {
+    const btn = e.popup.getElement()?.querySelector(".view-pin-btn");
+    btn?.addEventListener("click", () => openPinDetail(btn.dataset.pinId, { onChange: loadPins }));
+  });
 
   function escapeHtml(str) {
     const div = document.createElement("div");

@@ -264,4 +264,57 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 .feed-post-body .likes { font-weight: 600; }
 .feed-post-body .caption { margin: 0.3rem 0 0; }
 
+/* ============================================================
+   Pin detail modal — capped at ~2/3 viewport height, not full screen
+   ============================================================ */
+.pin-detail-modal {
+  max-height: 70vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pin-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 1.25rem 0.5rem;
+  flex-shrink: 0;
+}
+.pin-detail-body { padding: 0.75rem 1.25rem 1.25rem; overflow-y: auto; }
+.pin-photo-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  flex-shrink: 0;
+}
+.pin-photo-carousel img {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+.feed-post-actions button.liked { color: var(--accent); }
+
+/* ============================================================
+   Full-screen modal (friends list) — distinct from the bottom-sheet
+   .modal-backdrop/.modal used for forms, and the 2/3-height
+   .pin-detail-modal used for pin viewing.
+   ============================================================ */
+.modal-backdrop-full {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 200;
+  overflow-y: auto;
+}
+.modal-full {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.25rem;
+  min-height: 100%;
+}
+
 .error-text { color: var(--danger); font-size: 0.9rem; }

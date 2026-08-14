@@ -1,40 +1,50 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
+import { openPinDetail } from "./pinDetailModal.js";
 
 const session = await requireSession();
 if (session) {
+  const params = new URLSearchParams(window.location.search);
+  const viewingUserId = params.get("id") || session.user.id;
+  const isOwnProfile = viewingUserId === session.user.id;
+
   let profileCache = null;
 
   await loadProfile();
-  await loadFriendsCount();
-  await loadFriendRequests();
+  await loadCounts();
+  if (isOwnProfile) {
+    document.getElementById("ownMenuArea").style.display = "block";
+    await loadFriendRequests();
+    setupMenu();
+    setupShare();
+  } else {
+    await renderFriendAction();
+  }
   await loadPinsGrid();
-  setupMenu();
-  setupFriendSearch();
-  setupShare();
+  setupFriendsCountButton();
 
   async function loadProfile() {
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
+    const { data: profile } = await supabase.from("profiles").select("*").eq("id", viewingUserId).single();
     profileCache = profile;
-    document.getElementById("profileUsername").textContent = profile.username || "—";
-    document.getElementById("profileFullName").textContent = profile.full_name || "";
-    if (profile.avatar_url) {
+    document.getElementById("profileUsername").textContent = profile?.username || "—";
+    document.getElementById("profileFullName").textContent = profile?.full_name || "";
+    if (profile?.avatar_url) {
       const { data } = await supabase.storage.from("media").createSignedUrl(profile.avatar_url, 3600);
       if (data?.signedUrl) document.getElementById("avatarImg").src = data.signedUrl;
     }
   }
 
-  async function loadFriendsCount() {
+  async function loadCounts() {
     const { count: pinCount } = await supabase
       .from("pins")
       .select("*", { count: "exact", head: true })
-      .eq("owner_id", session.user.id);
+      .eq("owner_id", viewingUserId);
     const { count: friendCount } = await supabase
       .from("friend_requests")
       .select("*", { count: "exact", head: true })
       .eq("status", "accepted")
-      .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
+      .or(`requester_id.eq.${viewingUserId},recipient_id.eq.${viewingUserId}`);
     document.getElementById("statPins").textContent = pinCount ?? 0;
     document.getElementById("statFriends").textContent = friendCount ?? 0;
   }
@@ -67,7 +77,7 @@ if (session) {
       row.querySelector(".accept-btn").addEventListener("click", async () => {
         await supabase.from("friend_requests").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", req.id);
         await loadFriendRequests();
-        await loadFriendsCount();
+        await loadCounts();
       });
       row.querySelector(".decline-btn").addEventListener("click", async () => {
         await supabase.from("friend_requests").update({ status: "declined", responded_at: new Date().toISOString() }).eq("id", req.id);
@@ -77,8 +87,80 @@ if (session) {
     }
   }
 
-  function setupFriendSearch() {
-    document.getElementById("friendSearchForm").addEventListener("submit", async (e) => {
+  async function getRelationship(otherUserId) {
+    const { data } = await supabase
+      .from("friend_requests")
+      .select("id, requester_id, status")
+      .or(`and(requester_id.eq.${session.user.id},recipient_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},recipient_id.eq.${session.user.id})`)
+      .maybeSingle();
+    return data;
+  }
+
+  async function renderFriendAction() {
+    const el = document.getElementById("friendActionArea");
+    const rel = await getRelationship(viewingUserId);
+
+    if (rel?.status === "accepted") {
+      el.innerHTML = `<button id="unfriendBtn" class="btn btn-danger">Unfriend</button>`;
+      el.querySelector("#unfriendBtn").addEventListener("click", async () => {
+        if (!confirm(`Remove ${profileCache?.username || "this person"} as a friend?`)) return;
+        await supabase.from("friend_requests").delete().eq("id", rel.id);
+        renderFriendAction();
+        loadCounts();
+      });
+    } else if (rel?.status === "pending" && rel.requester_id === session.user.id) {
+      el.innerHTML = `<span class="pill">Request sent</span>`;
+    } else if (rel?.status === "pending") {
+      el.innerHTML = `<button id="acceptHereBtn" class="btn btn-primary">Accept request</button>`;
+      el.querySelector("#acceptHereBtn").addEventListener("click", async () => {
+        await supabase.from("friend_requests").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", rel.id);
+        renderFriendAction();
+        loadCounts();
+      });
+    } else {
+      el.innerHTML = `<button id="addFriendBtn" class="btn btn-primary">Add friend</button>`;
+      el.querySelector("#addFriendBtn").addEventListener("click", async () => {
+        const { error } = await supabase.from("friend_requests").insert({ requester_id: session.user.id, recipient_id: viewingUserId });
+        if (error) return alert(error.message);
+        renderFriendAction();
+      });
+    }
+  }
+
+  function setupFriendsCountButton() {
+    const btn = document.getElementById("friendsCountBtn");
+    if (!isOwnProfile) {
+      btn.style.cursor = "default";
+      return;
+    }
+    btn.addEventListener("click", openFriendsModal);
+  }
+
+  async function openFriendsModal() {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop-full";
+    backdrop.innerHTML = `
+      <div class="modal-full stack">
+        <div class="row-between">
+          <h2 style="margin:0;">Friends</h2>
+          <button id="friendsModalClose" class="btn-link" style="font-size:1.4rem; padding:0.2rem 0.5rem;">✕</button>
+        </div>
+        <form id="friendSearchForm" class="row">
+          <input id="friendSearchInput" placeholder="Search by username" />
+          <button type="submit" class="btn">Search</button>
+        </form>
+        <div id="friendSearchResults" class="stack"></div>
+        <h3 style="margin:1rem 0 0;">Your friends</h3>
+        <div id="currentFriendsList" class="stack"></div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    backdrop.querySelector("#friendsModalClose").addEventListener("click", () => backdrop.remove());
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) backdrop.remove();
+    });
+
+    backdrop.querySelector("#friendSearchForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const q = document.getElementById("friendSearchInput").value.trim();
       const resultsEl = document.getElementById("friendSearchResults");
@@ -96,38 +178,36 @@ if (session) {
         resultsEl.innerHTML = '<p class="muted">No one found.</p>';
         return;
       }
-
       for (const person of matches) {
         resultsEl.appendChild(await renderSearchResult(person));
       }
     });
+
+    await renderCurrentFriends(backdrop);
   }
 
   async function renderSearchResult(person) {
-    const { data: existing } = await supabase
-      .from("friend_requests")
-      .select("id, requester_id, status")
-      .or(
-        `and(requester_id.eq.${session.user.id},recipient_id.eq.${person.id}),and(requester_id.eq.${person.id},recipient_id.eq.${session.user.id})`
-      )
-      .maybeSingle();
-
+    const rel = await getRelationship(person.id);
     const row = document.createElement("div");
     row.className = "row-between";
 
     let actionHtml;
-    if (existing?.status === "accepted") {
+    if (rel?.status === "accepted") {
       actionHtml = `<span class="pill">Friends</span>`;
-    } else if (existing?.status === "pending" && existing.requester_id === session.user.id) {
+    } else if (rel?.status === "pending" && rel.requester_id === session.user.id) {
       actionHtml = `<span class="pill">Request sent</span>`;
-    } else if (existing?.status === "pending") {
-      actionHtml = `<span class="pill">Check requests above</span>`;
+    } else if (rel?.status === "pending") {
+      actionHtml = `<span class="pill">Check requests</span>`;
     } else {
       actionHtml = `<button class="btn btn-primary add-friend-btn">Add friend</button>`;
     }
 
-    row.innerHTML = `<span>${escapeHtml(person.username)}</span>`;
+    row.innerHTML = `<button class="btn-link goto-profile" style="padding:0;">${escapeHtml(person.username)}</button>`;
     row.insertAdjacentHTML("beforeend", actionHtml);
+
+    row.querySelector(".goto-profile").addEventListener("click", () => {
+      window.location.href = `profile.html?id=${person.id}`;
+    });
 
     row.querySelector(".add-friend-btn")?.addEventListener("click", async (e) => {
       e.target.disabled = true;
@@ -143,29 +223,76 @@ if (session) {
     return row;
   }
 
+  async function renderCurrentFriends(backdrop) {
+    const listEl = backdrop.querySelector("#currentFriendsList");
+    const { data: accepted } = await supabase
+      .from("friend_requests")
+      .select("id, requester_id, recipient_id")
+      .eq("status", "accepted")
+      .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
+
+    if (!accepted?.length) {
+      listEl.innerHTML = '<p class="muted">No friends yet — search above to add some.</p>';
+      return;
+    }
+
+    const friendIds = accepted.map((r) => (r.requester_id === session.user.id ? r.recipient_id : r.requester_id));
+    const { data: friends } = await supabase.from("profiles").select("id, username, avatar_url").in("id", friendIds);
+
+    listEl.innerHTML = "";
+    for (const friend of friends || []) {
+      const reqRow = accepted.find((r) => r.requester_id === friend.id || r.recipient_id === friend.id);
+      let avatarUrl = "icons/icon-192.png";
+      if (friend.avatar_url) {
+        const { data } = await supabase.storage.from("media").createSignedUrl(friend.avatar_url, 3600);
+        if (data?.signedUrl) avatarUrl = data.signedUrl;
+      }
+      const row = document.createElement("div");
+      row.className = "row-between";
+      row.innerHTML = `
+        <button class="btn-link goto-profile row" style="padding:0; gap:0.5rem;">
+          <img class="avatar" style="width:32px; height:32px;" src="${avatarUrl}" />
+          <span>${escapeHtml(friend.username)}</span>
+        </button>
+        <button class="btn btn-danger unfriend-btn">Unfriend</button>
+      `;
+      row.querySelector(".goto-profile").addEventListener("click", () => {
+        window.location.href = `profile.html?id=${friend.id}`;
+      });
+      row.querySelector(".unfriend-btn").addEventListener("click", async () => {
+        if (!confirm(`Remove ${friend.username} as a friend?`)) return;
+        await supabase.from("friend_requests").delete().eq("id", reqRow.id);
+        await renderCurrentFriends(backdrop);
+        await loadCounts();
+      });
+      listEl.appendChild(row);
+    }
+  }
+
   async function loadPinsGrid() {
     const gridEl = document.getElementById("pinsGrid");
     const { data: pins } = await supabase
       .from("pins")
       .select("id, title, pin_photos(storage_path, created_at)")
-      .eq("owner_id", session.user.id)
+      .eq("owner_id", viewingUserId)
       .order("created_at", { ascending: false });
 
     gridEl.innerHTML = "";
 
-    const addTile = document.createElement("button");
-    addTile.className = "add-pin-tile";
-    addTile.setAttribute("aria-label", "Add new pin");
-    addTile.textContent = "+";
-    addTile.addEventListener("click", () => {
-      openPinForm({ onSaved: () => { loadPinsGrid(); loadFriendsCount(); } });
-    });
-    gridEl.appendChild(addTile);
+    if (isOwnProfile) {
+      const addTile = document.createElement("button");
+      addTile.className = "add-pin-tile";
+      addTile.setAttribute("aria-label", "Add new pin");
+      addTile.textContent = "+";
+      addTile.addEventListener("click", () => {
+        openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
+      });
+      gridEl.appendChild(addTile);
+    }
 
     for (const pin of pins || []) {
       const cover = [...(pin.pin_photos || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
-      const tile = document.createElement("a");
-      tile.href = `pin.html?id=${pin.id}`;
+      const tile = document.createElement("button");
       tile.title = pin.title;
 
       if (cover) {
@@ -177,14 +304,21 @@ if (session) {
       } else {
         tile.innerHTML = `<div class="row" style="height:100%; align-items:center; justify-content:center; background:var(--border); font-size:1.6rem;">🗺️</div>`;
       }
+      tile.addEventListener("click", () => openPinDetail(pin.id, { onChange: () => { loadPinsGrid(); loadCounts(); } }));
       gridEl.appendChild(tile);
     }
 
-    if (!pins?.length) {
+    if (!pins?.length && isOwnProfile) {
       const empty = document.createElement("p");
       empty.className = "muted";
       empty.style.gridColumn = "1 / -1";
       empty.textContent = "No pins yet — tap + to add your first one.";
+      gridEl.appendChild(empty);
+    } else if (!pins?.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.style.gridColumn = "1 / -1";
+      empty.textContent = "No pins to show.";
       gridEl.appendChild(empty);
     }
   }
