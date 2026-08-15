@@ -60,20 +60,20 @@ export async function renderPostCard(pin, container, options = {}) {
   const card = container;
   card.classList.add("post-card");
 
-  // Description + directions flow as one caption, clamped together.
-  const captionText = [pin.description, pin.directions ? `How to get there: ${pin.directions}` : null]
-    .filter(Boolean)
-    .join("  ");
-  const captionLong = captionText.length > 140;
+  // Description flows right after the name; directions gets its own line
+  // below, but both still count toward the same 3-line clamp.
+  const descriptionText = pin.description || "";
+  const directionsText = pin.directions ? `How to get there: ${pin.directions}` : "";
+  const captionLong = descriptionText.length + directionsText.length > 140;
 
   card.innerHTML = `
     <div class="post-header">
       <strong class="post-title">${escapeHtml(pin.title)}</strong>
       <div class="post-header-center">
         <span class="post-drag-handle" aria-hidden="true"></span>
-        ${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}
       </div>
       <div class="post-header-end">
+        ${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}
         <div class="post-menu-wrap" style="position:relative;">
           <button class="post-menu-btn" aria-label="Post menu">⋯</button>
           <div class="post-menu-dropdown card stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:160px; padding:0.4rem; gap:0.25rem;">
@@ -105,10 +105,7 @@ export async function renderPostCard(pin, container, options = {}) {
     </div>
 
     <div class="post-body">
-      <p class="post-caption ${captionLong ? "clamped" : ""}">
-        <button class="post-owner-avatar-btn" aria-label="View profile"><img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" /></button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button>
-        ${captionText ? ` ${escapeHtml(captionText)}` : ""}${captionLong ? ' <button class="post-showmore-btn">more</button>' : ""}
-      </p>
+      <p class="post-caption ${captionLong ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile"><img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" /></button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<br /><span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}${captionLong ? ' <button class="post-showmore-btn">more</button>' : ""}</p>
     </div>
   `;
 

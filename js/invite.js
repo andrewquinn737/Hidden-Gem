@@ -35,6 +35,19 @@ async function render() {
     return;
   }
 
+  // Shared-visit links land directly on the Scheduler with a small popup
+  // over it (just the pin name + Join event) instead of this standalone
+  // page — but still route through sign-in first if needed.
+  if (kind === "visit_share") {
+    const target = `scheduler.html?visitShareToken=${token}`;
+    if (!session) {
+      window.location.href = `login.html?redirect=${encodeURIComponent(target)}`;
+    } else {
+      window.location.href = target;
+    }
+    return;
+  }
+
   const title = kind === "pin" ? pinInvite.pin_title : kind === "visit" ? visitInvite.pin_title : visitShare.pin_title;
   const visitDetails = visitInvite || visitShare;
   const description =

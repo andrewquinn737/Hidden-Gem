@@ -42,6 +42,10 @@ if (session) {
     setupShare();
     setupToggle();
     setupNotifications();
+    // Own profile never shows a friend action — hide it so it doesn't
+    // still count as a flex item in the header row (which would push
+    // ownMenuArea to visually "center" instead of the true right edge).
+    document.getElementById("friendActionArea").style.display = "none";
   } else {
     await renderFriendAction();
   }

@@ -121,10 +121,69 @@ if (session) {
     chip.className = "calendar-event";
     const d = new Date(visit.scheduled_at);
     chip.textContent = `${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${visit.pins?.title ?? "Pin"}`;
+
+    const isOrganizer = visit.organizer_id === session.user.id;
+    let justDragged = false;
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (justDragged) {
+        justDragged = false;
+        return;
+      }
       openVisitDetail(visit);
     });
+
+    // Owner-only: hold and drag to a different hour slot to reschedule,
+    // instead of opening the detail popup.
+    if (isOrganizer) {
+      let pressTimer = null;
+      let dragging = false;
+      let startX = 0;
+      let startY = 0;
+
+      chip.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        startX = e.clientX;
+        startY = e.clientY;
+        pressTimer = setTimeout(() => {
+          dragging = true;
+          chip.classList.add("dragging");
+          chip.style.pointerEvents = "none";
+          chip.setPointerCapture?.(e.pointerId);
+        }, 500);
+      });
+      chip.addEventListener("pointermove", (e) => {
+        if (dragging) {
+          chip.style.transform = `translateY(${e.clientY - startY}px)`;
+          return;
+        }
+        if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) clearTimeout(pressTimer);
+      });
+      const endDrag = async (e) => {
+        clearTimeout(pressTimer);
+        if (!dragging) return;
+        dragging = false;
+        justDragged = true;
+        setTimeout(() => (justDragged = false), 0);
+        chip.style.transform = "";
+        chip.style.pointerEvents = "";
+        chip.classList.remove("dragging");
+        const dropEl = document.elementFromPoint(e.clientX, e.clientY);
+        const targetSlot = dropEl?.closest(".cal-hour-slot");
+        if (targetSlot) {
+          const newHour = Number(targetSlot.dataset.hour);
+          if (newHour !== d.getHours()) {
+            const updated = new Date(d);
+            updated.setHours(newHour);
+            await supabase.from("visits").update({ scheduled_at: updated.toISOString() }).eq("id", visit.id);
+            await renderDayView();
+          }
+        }
+      };
+      chip.addEventListener("pointerup", endDrag);
+      chip.addEventListener("pointercancel", endDrag);
+    }
+
     return chip;
   }
 
@@ -360,10 +419,16 @@ if (session) {
   // ============================================================
   async function openConfirmDraftModal() {
     const needsPin = !draftEvent.pinId;
-    let pinOptions = "";
+    let searchablePins = [];
     if (needsPin) {
-      const { data: pins } = await supabase.from("pins").select("id, title").order("title");
-      pinOptions = (pins || []).map((p) => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("");
+      const [{ data: owned }, { data: saved }] = await Promise.all([
+        supabase.from("pins").select("id, title").eq("owner_id", session.user.id),
+        supabase.from("pin_saves").select("pins(id, title)").eq("user_id", session.user.id),
+      ]);
+      const byId = new Map();
+      (owned || []).forEach((p) => byId.set(p.id, p.title));
+      (saved || []).forEach((s) => s.pins && byId.set(s.pins.id, s.pins.title));
+      searchablePins = Array.from(byId, ([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
     }
 
     const backdrop = document.createElement("div");
@@ -374,24 +439,26 @@ if (session) {
         <form id="confirmDraftForm" class="stack">
           ${
             needsPin
-              ? `<div><label class="field-label" for="draftPinSelect">Pin</label><select id="draftPinSelect" required><option value="">Choose a pin…</option>${pinOptions}</select></div>`
+              ? `<div>
+                  <label class="field-label" for="draftPinSearch">Pin</label>
+                  <input id="draftPinSearch" placeholder="Search your pins…" autocomplete="off" required />
+                  <div id="draftPinResults" class="stack" style="max-height:160px; overflow-y:auto; margin-top:0.4rem;"></div>
+                </div>`
               : `<div><label class="field-label">Pin</label><input value="${escapeAttr(draftEvent.pinTitle)}" disabled /></div>`
           }
-          <div>
-            <label class="field-label" for="draftDate">Date</label>
-            <input id="draftDate" type="date" value="${toDateInputValue(currentDate)}" required />
-          </div>
-          <div>
-            <label class="field-label" for="draftTime">Time</label>
-            <input id="draftTime" type="time" value="${toTimeInputValue(draftEvent.hour, draftEvent.minute)}" required />
+          <div class="row">
+            <div style="flex:1;">
+              <label class="field-label" for="draftDate">Date</label>
+              <input id="draftDate" type="date" value="${toDateInputValue(currentDate)}" required />
+            </div>
+            <div style="flex:1;">
+              <label class="field-label" for="draftTime">Time</label>
+              <input id="draftTime" type="time" value="${toTimeInputValue(draftEvent.hour, draftEvent.minute)}" required />
+            </div>
           </div>
           <div>
             <label class="field-label" for="draftNotes">Notes</label>
             <textarea id="draftNotes" rows="2"></textarea>
-          </div>
-          <div>
-            <label class="field-label" for="draftInvitees">Invite by username, email, or phone</label>
-            <input id="draftInvitees" placeholder="comma separated" />
           </div>
           <p class="error-text" id="draftFormError" style="display:none;"></p>
           <div class="row">
@@ -402,22 +469,56 @@ if (session) {
       </div>
     `;
     document.body.appendChild(backdrop);
-    const close = () => backdrop.remove();
+
+    // Cancelling/closing without confirming clears the draft entirely —
+    // the "New event — pick a pin" chip only exists while this popup does.
+    const dismiss = () => {
+      backdrop.remove();
+      draftEvent = null;
+      switchView(viewMode);
+    };
     backdrop.addEventListener("click", (e) => {
-      if (e.target === backdrop) close();
+      if (e.target === backdrop) dismiss();
     });
-    backdrop.querySelector("#draftCancelBtn").addEventListener("click", close);
+    backdrop.querySelector("#draftCancelBtn").addEventListener("click", dismiss);
+
+    let selectedPinId = draftEvent.pinId;
+    if (needsPin) {
+      const searchInput = backdrop.querySelector("#draftPinSearch");
+      const resultsEl = backdrop.querySelector("#draftPinResults");
+      function renderResults(filterText) {
+        const matches = filterText
+          ? searchablePins.filter((p) => p.title.toLowerCase().includes(filterText.toLowerCase()))
+          : searchablePins;
+        resultsEl.innerHTML = matches.length
+          ? matches
+              .map((p) => `<button type="button" class="btn draft-pin-option" data-id="${p.id}" style="width:100%; text-align:left; border:none;">${escapeHtml(p.title)}</button>`)
+              .join("")
+          : '<p class="muted" style="margin:0;">No matching pins.</p>';
+        resultsEl.querySelectorAll(".draft-pin-option").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            selectedPinId = btn.dataset.id;
+            searchInput.value = btn.textContent;
+            resultsEl.innerHTML = "";
+          });
+        });
+      }
+      searchInput.addEventListener("input", () => {
+        selectedPinId = null;
+        renderResults(searchInput.value.trim());
+      });
+      searchInput.addEventListener("focus", () => renderResults(searchInput.value.trim()));
+    }
 
     backdrop.querySelector("#confirmDraftForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const errorEl = backdrop.querySelector("#draftFormError");
       errorEl.style.display = "none";
 
-      const pinId = needsPin ? backdrop.querySelector("#draftPinSelect").value : draftEvent.pinId;
+      const pinId = selectedPinId;
       const dateVal = backdrop.querySelector("#draftDate").value;
       const timeVal = backdrop.querySelector("#draftTime").value;
       const notes = backdrop.querySelector("#draftNotes").value.trim() || null;
-      const inviteesRaw = backdrop.querySelector("#draftInvitees").value.trim();
 
       if (!pinId || !dateVal || !timeVal) {
         errorEl.textContent = "A pin, date, and time are all required to confirm.";
@@ -427,7 +528,7 @@ if (session) {
 
       const scheduledAt = new Date(`${dateVal}T${timeVal}`);
 
-      const { data: visit, error } = await supabase
+      const { error } = await supabase
         .from("visits")
         .insert({ pin_id: pinId, organizer_id: session.user.id, scheduled_at: scheduledAt.toISOString(), notes })
         .select()
@@ -439,27 +540,16 @@ if (session) {
         return;
       }
 
-      const invitees = inviteesRaw.split(",").map((s) => s.trim()).filter(Boolean);
-      for (const invitee of invitees) {
-        const isEmail = invitee.includes("@");
-        const isPhone = /^\+?[0-9\-\s()]{7,}$/.test(invitee);
-        if (isEmail) await supabase.from("visit_participants").insert({ visit_id: visit.id, invite_email: invitee });
-        else if (isPhone) await supabase.from("visit_participants").insert({ visit_id: visit.id, invite_phone: invitee });
-        else {
-          const { data: profile } = await supabase.from("profiles").select("id").eq("username", invitee).maybeSingle();
-          if (profile) await supabase.from("visit_participants").insert({ visit_id: visit.id, user_id: profile.id });
-        }
-      }
-
       draftEvent = null;
-      close();
+      backdrop.remove();
       currentDate = startOfDay(scheduledAt);
       switchView("day");
     });
   }
 
   // ============================================================
-  // Existing-visit detail popup
+  // Existing-visit detail popup — half-screen, same shell as pin
+  // popups (sticky header, centered drag handle, X on desktop only).
   // ============================================================
   async function openVisitDetail(visit) {
     const when = new Date(visit.scheduled_at);
@@ -467,40 +557,45 @@ if (session) {
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
     backdrop.innerHTML = `
-      <div class="modal stack">
-        <div class="row-between">
-          <h2 style="margin:0;">Visit</h2>
-          <button id="visitCloseBtn" class="btn-link" style="font-size:1.4rem; padding:0.2rem 0.5rem;">✕</button>
+      <div class="modal pin-detail-modal visit-detail-modal stack">
+        <div class="post-header">
+          <strong class="post-title">${escapeHtml(visit.pins?.title || "Visit")}</strong>
+          <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
+          <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
         </div>
-        <p class="muted" style="margin:0;">${when.toLocaleString()}</p>
-        <button id="visitPinNameBtn" class="btn-link" style="padding:0; font-weight:600; font-size:1rem; text-align:left;">📍 ${escapeHtml(visit.pins?.title || "Pin")}</button>
-        ${visit.notes ? `<p style="margin:0;">${escapeHtml(visit.notes)}</p>` : ""}
-        <div id="visitSharedWith" class="muted" style="margin:0;"></div>
-        <div class="row">
-          <button id="shareVisitBtn" class="btn" style="flex:1;">Share</button>
-          ${isOrganizer ? '<button id="cancelVisitBtn" class="btn btn-danger" style="flex:1;">Cancel visit</button>' : ""}
+        <div class="visit-detail-body stack">
+          <p class="muted" style="margin:0;">${when.toLocaleString()}</p>
+          <button id="visitPinNameBtn" class="btn-link" style="padding:0; font-weight:600; font-size:1rem; text-align:left;">📍 ${escapeHtml(visit.pins?.title || "Pin")}</button>
+          ${visit.notes ? `<p style="margin:0;">${escapeHtml(visit.notes)}</p>` : ""}
+          <div id="visitSharedWith" class="muted" style="margin:0;"></div>
+          <div class="row">
+            <button id="shareVisitBtn" class="btn" style="flex:1;">Share</button>
+            ${isOrganizer ? '<button id="cancelVisitBtn" class="btn btn-danger" style="flex:1;">Cancel visit</button>' : ""}
+          </div>
         </div>
       </div>
     `;
     document.body.appendChild(backdrop);
+    const modalEl = backdrop.querySelector(".visit-detail-modal");
     const close = () => backdrop.remove();
     backdrop.addEventListener("click", (e) => {
       if (e.target === backdrop) close();
     });
-    backdrop.querySelector("#visitCloseBtn").addEventListener("click", close);
-    backdrop.querySelector("#visitPinNameBtn").addEventListener("click", () => {
+    modalEl.querySelector(".post-close-btn").addEventListener("click", close);
+    setupSheetDrag(modalEl, close);
+    modalEl.querySelector("#visitPinNameBtn").addEventListener("click", () => {
       openPinDetail(visit.pin_id, {});
     });
-    backdrop.querySelector("#cancelVisitBtn")?.addEventListener("click", async () => {
+    modalEl.querySelector("#cancelVisitBtn")?.addEventListener("click", async () => {
       if (!confirm("Cancel this planned visit?")) return;
       await supabase.from("visits").delete().eq("id", visit.id);
       close();
       switchView(viewMode);
     });
-    backdrop.querySelector("#shareVisitBtn").addEventListener("click", async () => {
+    modalEl.querySelector("#shareVisitBtn").addEventListener("click", async () => {
       const { data } = await supabase.from("visits").select("share_token").eq("id", visit.id).single();
       const url = `${window.location.origin}/invite.html?token=${data.share_token}`;
-      const shareData = { title: "Hidden Gem — Visit", text: `Join me for ${visit.pins?.title || "a visit"}!`, url };
+      const shareData = { title: "Hidden Gem — Visit", text: `Join me at ${visit.pins?.title || "a visit"}!`, url };
       if (navigator.share) {
         try {
           await navigator.share(shareData);
@@ -519,8 +614,100 @@ if (session) {
       .eq("visit_id", visit.id)
       .not("user_id", "is", null);
     const names = (participants || []).map((p) => p.profiles?.username).filter(Boolean);
-    backdrop.querySelector("#visitSharedWith").textContent = names.length ? `Shared with: ${names.join(", ")}` : "";
+    modalEl.querySelector("#visitSharedWith").textContent = names.length ? `Shared with: ${names.join(", ")}` : "";
   }
+
+  // Shared drag-handle-to-resize/dismiss behavior (mirrors js/postCard.js).
+  function setupSheetDrag(modalEl, close) {
+    const dragHandle = modalEl.querySelector(".post-drag-handle");
+    if (!dragHandle) return;
+    let dragging = false;
+    let startY = 0;
+    let startedFull = false;
+    dragHandle.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      startY = e.clientY;
+      startedFull = modalEl.classList.contains("sheet-full");
+      modalEl.style.transition = "none";
+      dragHandle.setPointerCapture(e.pointerId);
+    });
+    dragHandle.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dy = e.clientY - startY;
+      modalEl.style.transform = `translateY(${startedFull ? Math.max(dy, 0) : dy}px)`;
+    });
+    const end = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      modalEl.style.transition = "";
+      modalEl.style.transform = "";
+      const dy = e.clientY - startY;
+      if (!startedFull && dy < -60) modalEl.classList.add("sheet-full");
+      else if (!startedFull && dy > 100) close();
+      else if (startedFull && dy > 250) close();
+      else if (startedFull && dy > 100) modalEl.classList.remove("sheet-full");
+    };
+    dragHandle.addEventListener("pointerup", end);
+    dragHandle.addEventListener("pointercancel", end);
+  }
+
+  // ============================================================
+  // Visit-share overlay — landed on via a shared visit link. Shows just
+  // the pin name and a Join event button over whatever view is already
+  // showing, instead of a separate standalone page.
+  // ============================================================
+  async function maybeShowVisitShareOverlay() {
+    const shareToken = params.get("visitShareToken");
+    if (!shareToken) return;
+    const { data, error } = await supabase.rpc("get_visit_by_share_token", { p_token: shareToken }).maybeSingle();
+    if (error || !data) return;
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal pin-detail-modal share-overlay-modal stack">
+        <div class="post-header">
+          <strong class="post-title">${escapeHtml(data.pin_title)}</strong>
+          <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
+          <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
+        </div>
+        <div class="stack" style="padding:0.85rem;">
+          <p class="muted" style="margin:0;">${new Date(data.scheduled_at).toLocaleString()}${data.organizer_username ? ` · shared by ${escapeHtml(data.organizer_username)}` : ""}</p>
+          ${data.notes ? `<p style="margin:0;">${escapeHtml(data.notes)}</p>` : ""}
+          <p class="error-text" id="shareJoinError" style="display:none;"></p>
+          <button id="shareJoinBtn" class="btn btn-primary">Join event</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    const modalEl = backdrop.querySelector(".share-overlay-modal");
+    const close = () => {
+      backdrop.remove();
+      const url = new URL(window.location.href);
+      url.searchParams.delete("visitShareToken");
+      window.history.replaceState({}, "", url);
+    };
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) close();
+    });
+    modalEl.querySelector(".post-close-btn").addEventListener("click", close);
+    setupSheetDrag(modalEl, close);
+
+    modalEl.querySelector("#shareJoinBtn").addEventListener("click", async () => {
+      const errorEl = modalEl.querySelector("#shareJoinError");
+      errorEl.style.display = "none";
+      const { error: joinError } = await supabase.rpc("accept_visit_share", { p_token: shareToken }).single();
+      if (joinError) {
+        errorEl.textContent = joinError.message;
+        errorEl.style.display = "block";
+        return;
+      }
+      close();
+      currentDate = startOfDay(new Date(data.scheduled_at));
+      switchView("day");
+    });
+  }
+  await maybeShowVisitShareOverlay();
 
   // ============================================================
   // Data + date helpers

@@ -75,7 +75,6 @@ export function renderNav() {
   mount.innerHTML = `
     <div class="topnav-bar">
       <a href="index.html" class="brand">Hidden Gem</a>
-      <a href="profile.html" class="topnav-mobile-brand">🗺️ Hidden Gem</a>
       <nav class="topnav-links">${desktopLinks}</nav>
       <button id="signOutBtn" class="btn-link">Sign out</button>
     </div>

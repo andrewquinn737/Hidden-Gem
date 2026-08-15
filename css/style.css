@@ -123,7 +123,7 @@ main {
 .bottom-tabbar {
   display: none;
   position: fixed;
-  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  bottom: calc(0.35rem + env(safe-area-inset-bottom));
   left: 0.75rem;
   right: 0.75rem;
   background: var(--tabbar-bg);
@@ -146,7 +146,7 @@ main {
 }
 .bottom-tabbar .tab svg { width: 22px; height: 22px; }
 .bottom-tabbar .tab.active { color: var(--tabbar-active-icon); background: var(--tabbar-active-bg); }
-.bottom-tabbar button.tab { background: none; border: none; font: inherit; }
+.bottom-tabbar button.tab { background: none; border: none; font-family: inherit; font-size: 0.7rem; line-height: normal; }
 
 .topnav-search-btn { font: inherit; background: none; border: none; padding: 0; color: var(--text-muted); cursor: pointer; }
 .topnav-search-btn:hover { color: var(--accent-hover); }
@@ -160,23 +160,14 @@ main {
 }
 .search-result-row:last-child { border-bottom: none; }
 
-html.is-mobile-device .topnav-links,
-html.is-mobile-device .topnav-bar .brand,
-html.is-mobile-device #signOutBtn { display: none; }
+html.is-mobile-device .topnav-bar { display: none; }
 html.is-mobile-device .bottom-tabbar { display: flex; }
-html.is-mobile-device main { padding-bottom: 5.5rem; }
+html.is-mobile-device main { padding-bottom: 5.5rem; padding-top: max(1rem, env(safe-area-inset-top)); }
+html.is-mobile-device main.map-main { padding-top: 0; }
 
 html.is-desktop-device .bottom-tabbar { display: none; }
 
-.topnav-mobile-brand {
-  display: none;
-  font-weight: 800;
-  font-size: 1.05rem;
-  color: var(--accent);
-  letter-spacing: 0.01em;
-}
-html.is-mobile-device .topnav-mobile-brand { display: block; }
-html.is-desktop-device .topnav-mobile-brand { display: none; }
+.topnav-mobile-brand { display: none; }
 
 /* ============================================================
    List views — table on desktop, card list on mobile.
@@ -203,7 +194,7 @@ html.is-mobile-device .list-table { display: none; }
                  their own stacking context so they can't cover UI outside
                  #map, like .map-toolbar below */
 }
-html.is-mobile-device #map { height: calc(100vh - 4.5rem); }
+html.is-mobile-device #map { height: 100vh; }
 
 .leaflet-popup-content { color: #1a1a1a; }
 .custom-pin-icon { background: none; border: none; }
@@ -282,8 +273,13 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 /* ============================================================
    Friends / Notifications half-screen popups
    ============================================================ */
-.friends-body, .notif-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; }
-.friends-modal.pin-detail-modal, .notif-modal.pin-detail-modal { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.friends-body, .notif-body, .visit-detail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; }
+.friends-modal.pin-detail-modal,
+.notif-modal.pin-detail-modal,
+.visit-detail-modal.pin-detail-modal,
+.share-overlay-modal.pin-detail-modal {
+  padding: 0; overflow: hidden; display: flex; flex-direction: column;
+}
 .notif-row {
   display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
   width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--border);
@@ -369,6 +365,13 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   cursor: pointer;
   line-height: 1.3;
 }
+.calendar-event.dragging {
+  opacity: 0.85;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  position: relative;
+  z-index: 10;
+  cursor: grabbing;
+}
 .calendar-event.draft {
   background: transparent;
   border: 2px dashed var(--accent);
@@ -430,7 +433,7 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 }
 .post-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .post-header-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-.post-header-end { display: flex; align-items: center; justify-content: flex-end; gap: 0.2rem; }
+.post-header-end { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
 .post-drag-handle {
   display: none;
   width: 36px; height: 5px;
@@ -459,11 +462,11 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .icon-btn svg { width: 23px; height: 23px; display: block; }
 .post-count { font-size: 0.85rem; color: var(--text); }
 .post-map-btn { margin-left: auto; }
-.post-body { padding: 0.3rem 0.85rem 0.85rem; }
+.post-body { padding: 0.3rem 0.85rem 0.85rem 0; }
 .post-caption { margin: 0; white-space: pre-wrap; }
 .post-owner-avatar-btn { display: inline-flex; vertical-align: middle; padding: 0; border: none; background: none; cursor: pointer; margin-right: 0.35rem; }
 .post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
-.post-owner-name { padding: 0; font-weight: 700; color: var(--text); vertical-align: middle; margin-right: 0.3rem; }
+.post-owner-name { padding: 0; font-weight: 700; color: var(--text); vertical-align: middle; margin-right: 0.35rem; }
 .post-caption.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: inherit; cursor: pointer; }
 

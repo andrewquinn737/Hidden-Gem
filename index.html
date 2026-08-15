@@ -23,7 +23,8 @@
   main.map-main { max-width: none; padding: 0; position: relative; }
   .map-toolbar {
     position: absolute;
-    top: 0.75rem; left: 0.75rem; right: 0.75rem;
+    top: max(0.75rem, env(safe-area-inset-top));
+    left: 0.75rem; right: 0.75rem;
     z-index: 40;
     display: flex; gap: 0.5rem; flex-wrap: wrap;
   }
@@ -42,7 +43,7 @@
     </form>
     <button id="geolocateBtn" class="btn">📍</button>
   </div>
-  <div id="repositionBanner" class="card row-between" style="display:none; position:absolute; top:0.75rem; left:0.75rem; right:0.75rem; z-index:45;">
+  <div id="repositionBanner" class="card row-between" style="display:none; position:absolute; top:max(0.75rem, env(safe-area-inset-top)); left:0.75rem; right:0.75rem; z-index:45;">
     <span id="repositionLabel" class="muted"></span>
     <div class="row" style="gap:0.4rem;">
       <button id="repositionCancelBtn" class="btn">Cancel</button>
