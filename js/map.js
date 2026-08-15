@@ -1,7 +1,7 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
-import { openPinDetailFullscreen } from "./pinDetailModal.js";
+import { openPinDetail } from "./pinDetailModal.js";
 import { searchPlace } from "./geo.js";
 
 const PIN_COLORS = {
@@ -29,6 +29,27 @@ if (session) {
 
   const map = L.map("map", { zoomControl: false }).setView([20, 0], 2);
   L.control.zoom({ position: "bottomright" }).addTo(map);
+
+  // Remember where the map was pointed so switching tabs and coming back
+  // (e.g. Discover -> a pin's map link -> Discover) leaves the map as you
+  // left it, instead of resetting to the world view every time.
+  const VIEW_KEY = "hg:mapView";
+  map.on("moveend", () => {
+    const c = map.getCenter();
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify({ lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
+  });
+  let restoredView = false;
+  if (!focusPinId && !repositionPinId) {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "null");
+      if (saved) {
+        map.setView([saved.lat, saved.lng], saved.zoom);
+        restoredView = true;
+      }
+    } catch {
+      // ignore malformed saved state
+    }
+  }
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -76,7 +97,7 @@ if (session) {
           <img class="map-pin-popup-thumb" style="display:none;" />
         </div>
       `,
-        { closeButton: false }
+        { closeButton: false, maxWidth: 420, minWidth: 140 }
       );
       markers[pin.id] = marker;
     }
@@ -88,7 +109,10 @@ if (session) {
     if (!el) return;
     const pinId = el.dataset.pinId;
 
-    el.addEventListener("click", () => openPinDetailFullscreen(pinId, { onChange: loadPins }));
+    el.addEventListener("click", () => {
+      markers[pinId]?.closePopup();
+      openPinDetail(pinId, { onChange: loadPins });
+    });
 
     const { data: photo } = await supabase
       .from("pin_photos")
@@ -126,7 +150,7 @@ if (session) {
       () => alert("Couldn't get your location.")
     );
   });
-  if (!focusPinId && !repositionPinId) navigator.geolocation?.getCurrentPosition(
+  if (!focusPinId && !repositionPinId && !restoredView) navigator.geolocation?.getCurrentPosition(
     (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], 12),
     () => {} // silently fall back to world view
   );

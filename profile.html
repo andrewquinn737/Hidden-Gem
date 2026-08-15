@@ -22,6 +22,7 @@
 <body data-page="profile.html">
 <div id="topnav"></div>
 <main class="stack">
+  <button id="backBtn" class="btn-link" style="display:none; padding:0; align-self:flex-start;" aria-label="Back">← Back</button>
   <div class="row-between profile-header-row">
     <div class="row" style="align-items:center; gap:0.85rem;">
       <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
@@ -33,17 +34,27 @@
         </span>
       </div>
     </div>
-    <div id="ownMenuArea" style="position:relative; display:none;">
-      <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
-      <div id="menuDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem; gap:0.25rem;">
-        <button id="addPinBtn" class="btn" style="width:100%; text-align:left; border:none;">+ Add pin</button>
-        <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
-        <button id="savedBtn" class="btn" style="width:100%; text-align:left; border:none;">Saved</button>
-        <button id="shareAppBtn" class="btn" style="width:100%; text-align:left; border:none;">Share app</button>
-        <button id="signOutMenuBtn" class="btn" style="width:100%; text-align:left; border:none;">Sign out</button>
+    <div id="ownMenuArea" class="row" style="gap:0.3rem; display:none;">
+      <button id="notifBtn" class="btn-link icon-btn" style="position:relative; padding:0.25rem 0.4rem;" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px; height:24px;"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span id="notifDot" style="display:none; position:absolute; top:2px; right:2px; width:9px; height:9px; border-radius:50%; background:var(--danger); border:1.5px solid var(--surface);"></span>
+      </button>
+      <div style="position:relative;">
+        <button id="menuBtn" class="btn-link" style="font-size:1.5rem; padding:0.25rem 0.6rem;" aria-label="Profile menu">⋯</button>
+        <div id="menuDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:160px; padding:0.4rem; gap:0.25rem;">
+          <button id="addPinBtn" class="btn" style="width:100%; text-align:left; border:none;">Add pin</button>
+          <button id="editProfileBtn" class="btn" style="width:100%; text-align:left; border:none;">Edit profile</button>
+          <button id="shareAppBtn" class="btn" style="width:100%; text-align:left; border:none;">Share app</button>
+          <button id="signOutMenuBtn" class="btn" style="width:100%; text-align:left; border:none;">Sign out</button>
+        </div>
       </div>
     </div>
     <div id="friendActionArea"></div>
+  </div>
+
+  <div id="profileToggle" class="profile-toggle" style="display:none;">
+    <button class="profile-toggle-btn active" data-view="posts">Your posts</button>
+    <button class="profile-toggle-btn" data-view="saved">Saved</button>
   </div>
 
   <div id="friendRequests"></div>

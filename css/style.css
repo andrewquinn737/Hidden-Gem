@@ -146,6 +146,19 @@ main {
 }
 .bottom-tabbar .tab svg { width: 22px; height: 22px; }
 .bottom-tabbar .tab.active { color: var(--tabbar-active-icon); background: var(--tabbar-active-bg); }
+.bottom-tabbar button.tab { background: none; border: none; font: inherit; }
+
+.topnav-search-btn { font: inherit; background: none; border: none; padding: 0; color: var(--text-muted); cursor: pointer; }
+.topnav-search-btn:hover { color: var(--accent-hover); }
+
+/* ============================================================
+   App-wide search (js/search.js)
+   ============================================================ */
+.search-result-row {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
+  background: none; border: none; border-bottom: 1px solid var(--border); padding: 0.6rem 0; color: var(--text);
+}
+.search-result-row:last-child { border-bottom: none; }
 
 html.is-mobile-device .topnav-links,
 html.is-mobile-device .topnav-bar .brand,
@@ -195,13 +208,18 @@ html.is-mobile-device #map { height: calc(100vh - 4.5rem); }
 .leaflet-popup-content { color: #1a1a1a; }
 .custom-pin-icon { background: none; border: none; }
 .map-pin-popup { align-items: center; gap: 0.6rem; cursor: pointer; min-width: 140px; }
+.map-pin-popup strong, .map-pin-popup .muted { white-space: nowrap; }
+.leaflet-popup-content-wrapper, .leaflet-popup-content { width: auto !important; }
 .map-pin-popup-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 
 .modal-backdrop {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.5);
   display: flex; align-items: flex-end; justify-content: center;
-  z-index: 100;
+  /* Higher than .modal-backdrop-full (200) — popups like comments/friends/
+     notifications are routinely opened from within an already-open
+     fullscreen pin view and must stack above it, not underneath it. */
+  z-index: 300;
 }
 html.is-desktop-device .modal-backdrop { align-items: center; }
 .modal {
@@ -241,7 +259,7 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
-.pins-grid a, .add-pin-tile {
+.pins-grid a, .pins-grid button, .add-pin-tile {
   display: block;
   aspect-ratio: 1;
   border-radius: 10px;
@@ -251,6 +269,27 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   padding: 0;
 }
 .pins-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ============================================================
+   Profile posts/saved toggle — spans the header's full width.
+   ============================================================ */
+.profile-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.profile-toggle-btn { flex: 1; border: none; border-radius: 0; background: var(--surface); color: var(--text-muted); padding: 0.5rem; }
+.profile-toggle-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+.profile-toggle-btn:first-child { border-right: 1px solid var(--border); }
+.profile-toggle-btn.active:first-child { border-right-color: var(--accent); }
+
+/* ============================================================
+   Friends / Notifications half-screen popups
+   ============================================================ */
+.friends-body, .notif-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; }
+.friends-modal.pin-detail-modal, .notif-modal.pin-detail-modal { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.notif-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+  width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--border);
+  padding: 0.7rem 0; color: var(--text);
+}
+.notif-row:last-child { border-bottom: none; }
 .add-pin-tile {
   display: flex;
   align-items: center;
@@ -415,21 +454,31 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-carousel .feed-post-photo-placeholder { flex: 0 0 100%; scroll-snap-align: start; }
 .feed-post-photo-placeholder { aspect-ratio: 4/5; }
 .post-photo-counter { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 0.3rem 0 0; }
-.post-actions { display: flex; align-items: center; gap: 0.9rem; padding: 0.5rem 0.85rem; font-size: 1.2rem; }
-.post-actions button, .post-actions a { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); font-size: inherit; text-decoration: none; }
-.post-actions button.liked { color: var(--accent); }
-.post-actions button.saved { color: var(--accent); }
+.post-actions { display: flex; align-items: center; gap: 1.1rem; padding: 0.5rem 0.85rem; }
+.post-actions .icon-btn { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; }
+.icon-btn svg { width: 23px; height: 23px; display: block; }
+.post-count { font-size: 0.85rem; color: var(--text); }
 .post-map-btn { margin-left: auto; }
 .post-body { padding: 0.3rem 0.85rem 0.85rem; }
 .post-caption { margin: 0; white-space: pre-wrap; }
 .post-owner-avatar-btn { display: inline-flex; vertical-align: middle; padding: 0; border: none; background: none; cursor: pointer; margin-right: 0.35rem; }
 .post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
-.post-owner-name { padding: 0; font-weight: 600; color: var(--text); vertical-align: middle; margin-right: 0.3rem; }
+.post-owner-name { padding: 0; font-weight: 700; color: var(--text); vertical-align: middle; margin-right: 0.3rem; }
 .post-caption.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; margin-top: 0.2rem; }
-.post-full-details { margin-top: 0.6rem; }
-.post-directions { margin: 0; }
-.post-comments-section { padding: 0 0.85rem 0.85rem; }
+.post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: inherit; cursor: pointer; }
+
+/* ============================================================
+   Comments popup (js/postCard.js openCommentsPopup) — reuses the
+   half-screen .pin-detail-modal shell, plain-row comment list.
+   ============================================================ */
+.comments-modal.pin-detail-modal { padding: 0; overflow: hidden; }
+.comments-modal { min-height: 0; }
+.comments-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; }
+.comment-row { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.comment-row:last-child { border-bottom: none; }
+.comment-author { padding: 0; font-weight: 600; color: var(--text); }
+.comment-body { margin: 0.2rem 0 0; }
+.comments-modal .post-comment-form { padding: 0.7rem 0.85rem; border-top: 1px solid var(--border); margin: 0; }
 
 /* Bottom-sheet grow/shrink via the drag handle — see js/postCard.js */
 html.is-mobile-device .pin-detail-modal { transition: max-height 0.2s ease, height 0.2s ease, border-radius 0.2s ease; }

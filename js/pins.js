@@ -45,5 +45,14 @@ if (session) {
         })
       )
     );
+
+    // Restore scroll position so leaving Discover (e.g. via a pin's map
+    // link) and coming back lands where you left off, not back at the top.
+    const savedScroll = sessionStorage.getItem("hg:discoverScroll");
+    if (savedScroll) requestAnimationFrame(() => window.scrollTo(0, Number(savedScroll)));
   }
+
+  window.addEventListener("scroll", () => {
+    sessionStorage.setItem("hg:discoverScroll", String(window.scrollY));
+  });
 }
