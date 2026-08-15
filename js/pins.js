@@ -15,7 +15,7 @@ if (session) {
     // pins from anyone. This is the whole "Discover" feed.
     const { data: pins, error } = await supabase
       .from("pins")
-      .select("id, title, description, directions, category, owner_id, lat, lng, created_at, pin_photos(storage_path, created_at), pin_likes(user_id), pin_comments(count)")
+      .select("id, title, description, directions, category, owner_id, lat, lng, created_at, pin_photos(storage_path, created_at), pin_likes(user_id), pin_saves(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -41,7 +41,7 @@ if (session) {
         renderPostCard(pin, slots[i], {
           currentUserId: session.user.id,
           onChange: loadFeed,
-          ownerMenuEnabled: false, // discover's 3-dot is a no-op for now
+          ownerMenuEnabled: true,
         })
       )
     );

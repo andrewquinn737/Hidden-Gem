@@ -66,7 +66,8 @@ if (session) {
       const isMine = pin.owner_id === session.user.id;
       const color = isMine ? PIN_COLORS.mine : friendIds.has(pin.owner_id) ? PIN_COLORS.friend : PIN_COLORS.other;
       const marker = L.marker([pin.lat, pin.lng], { icon: coloredIcon(color) }).addTo(map);
-      marker.bindPopup(`
+      marker.bindPopup(
+        `
         <div class="map-pin-popup row" data-pin-id="${pin.id}">
           <div style="flex:1; min-width:0;">
             <strong>${escapeHtml(pin.title)}</strong>
@@ -74,7 +75,9 @@ if (session) {
           </div>
           <img class="map-pin-popup-thumb" style="display:none;" />
         </div>
-      `);
+      `,
+        { closeButton: false }
+      );
       markers[pin.id] = marker;
     }
   }

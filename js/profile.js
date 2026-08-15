@@ -1,7 +1,7 @@
 import { requireSession, signOut } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
-import { openPinDetail } from "./pinDetailModal.js";
+import { openPinDetail, openPinDetailFullscreen } from "./pinDetailModal.js";
 
 const session = await requireSession();
 if (session) {
@@ -15,8 +15,8 @@ if (session) {
   await loadCounts();
   if (isOwnProfile) {
     document.getElementById("ownMenuArea").style.display = "block";
-    document.getElementById("addPinBtn").style.display = "inline-block";
     document.getElementById("addPinBtn").addEventListener("click", () => {
+      document.getElementById("menuDropdown").style.display = "none";
       openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
     });
     await loadFriendRequests();
@@ -32,7 +32,6 @@ if (session) {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", viewingUserId).single();
     profileCache = profile;
     document.getElementById("profileUsername").textContent = profile?.username || "—";
-    document.getElementById("profileFullName").textContent = profile?.full_name || "";
     if (profile?.avatar_url) {
       const { data } = await supabase.storage.from("media").createSignedUrl(profile.avatar_url, 3600);
       if (data?.signedUrl) document.getElementById("avatarImg").src = data.signedUrl;
@@ -308,7 +307,7 @@ if (session) {
       } else {
         tile.innerHTML = `<div class="row" style="height:100%; align-items:center; justify-content:center; background:var(--border); font-size:1.6rem;">🗺️</div>`;
       }
-      tile.addEventListener("click", () => openPinDetail(pin.id, { onChange: () => { loadPinsGrid(); loadCounts(); } }));
+      tile.addEventListener("click", () => openPinDetailFullscreen(pin.id, { onChange: () => { loadPinsGrid(); loadCounts(); } }));
       gridEl.appendChild(tile);
     });
 
@@ -316,7 +315,7 @@ if (session) {
       const empty = document.createElement("p");
       empty.className = "muted";
       empty.style.gridColumn = "1 / -1";
-      empty.textContent = "No pins yet — tap \"+ Add pin\" above to add your first one.";
+      empty.textContent = "No pins yet — open the ⋯ menu above and tap \"+ Add pin\" to add your first one.";
       gridEl.appendChild(empty);
     } else if (!pins?.length) {
       const empty = document.createElement("p");
@@ -339,7 +338,70 @@ if (session) {
       dropdown.style.display = "none";
       openEditProfileModal();
     });
+    document.getElementById("savedBtn").addEventListener("click", () => {
+      dropdown.style.display = "none";
+      openSavedModal();
+    });
     document.getElementById("signOutMenuBtn").addEventListener("click", signOut);
+  }
+
+  async function openSavedModal() {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop-full";
+    backdrop.innerHTML = `
+      <div class="modal-full stack">
+        <div class="row-between">
+          <h2 style="margin:0;">Saved</h2>
+          <button id="savedModalClose" class="btn-link" style="font-size:1.4rem; padding:0.2rem 0.5rem;">✕</button>
+        </div>
+        <div id="savedGrid" class="pins-grid"></div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    backdrop.querySelector("#savedModalClose").addEventListener("click", () => backdrop.remove());
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) backdrop.remove();
+    });
+
+    const gridEl = backdrop.querySelector("#savedGrid");
+    const { data: saves } = await supabase
+      .from("pin_saves")
+      .select("pin_id, created_at, pins(id, title, pin_photos(storage_path, created_at))")
+      .eq("user_id", session.user.id)
+      .order("created_at", { ascending: false });
+
+    const pins = (saves || []).map((s) => s.pins).filter(Boolean);
+    if (!pins.length) {
+      gridEl.innerHTML = '<p class="muted" style="grid-column:1/-1;">No saved posts yet.</p>';
+      return;
+    }
+
+    const covers = pins.map(
+      (pin) => [...(pin.pin_photos || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0]
+    );
+    const coverPaths = covers.filter(Boolean).map((c) => c.storage_path);
+    let signedByPath = {};
+    if (coverPaths.length) {
+      const { data: signed } = await supabase.storage.from("media").createSignedUrls(coverPaths, 3600);
+      (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
+    }
+
+    gridEl.innerHTML = "";
+    pins.forEach((pin, i) => {
+      const cover = covers[i];
+      const tile = document.createElement("button");
+      tile.title = pin.title;
+      if (cover) {
+        const img = document.createElement("img");
+        img.src = signedByPath[cover.storage_path] || "";
+        img.alt = pin.title;
+        tile.appendChild(img);
+      } else {
+        tile.innerHTML = `<div class="row" style="height:100%; align-items:center; justify-content:center; background:var(--border); font-size:1.6rem;">🗺️</div>`;
+      }
+      tile.addEventListener("click", () => openPinDetailFullscreen(pin.id, {}));
+      gridEl.appendChild(tile);
+    });
   }
 
   function openEditProfileModal() {

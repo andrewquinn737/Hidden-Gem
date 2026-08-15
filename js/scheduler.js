@@ -1,5 +1,6 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
+import { openPinDetail } from "./pinDetailModal.js";
 
 const session = await requireSession();
 if (session) {
@@ -129,10 +130,10 @@ if (session) {
 
   function renderDraftChip() {
     const chip = document.createElement("div");
-    chip.className = "calendar-event draft";
+    chip.className = "calendar-event";
     const label = draftEvent.pinTitle || "New event — pick a pin";
     const timeLabel = formatHourMinute(draftEvent.hour, draftEvent.minute);
-    chip.textContent = `${timeLabel} · ${label} (tap to confirm)`;
+    chip.textContent = `${timeLabel} · ${label}`;
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       openConfirmDraftModal();
@@ -153,11 +154,12 @@ if (session) {
       const slot = e.target.closest(".cal-hour-slot");
       pointerStart = { x: e.clientX, y: e.clientY, time: Date.now(), hour: slot ? Number(slot.dataset.hour) : null };
       longPressFired = false;
-      longPressTimer = setTimeout(() => {
+      longPressTimer = setTimeout(async () => {
         if (pointerStart && pointerStart.hour != null) {
           longPressFired = true;
           draftEvent = { pinId: null, pinTitle: null, hour: pointerStart.hour, minute: 0 };
-          renderDayView();
+          await renderDayView();
+          openConfirmDraftModal();
         }
       }, 500);
     });
@@ -459,20 +461,24 @@ if (session) {
   // ============================================================
   // Existing-visit detail popup
   // ============================================================
-  function openVisitDetail(visit) {
+  async function openVisitDetail(visit) {
     const when = new Date(visit.scheduled_at);
     const isOrganizer = visit.organizer_id === session.user.id;
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
     backdrop.innerHTML = `
       <div class="modal stack">
-        <h2 style="margin:0;">${escapeHtml(visit.pins?.title || "Visit")}</h2>
-        <p class="muted">${when.toLocaleString()}</p>
-        ${visit.notes ? `<p>${escapeHtml(visit.notes)}</p>` : ""}
+        <div class="row-between">
+          <h2 style="margin:0;">Visit</h2>
+          <button id="visitCloseBtn" class="btn-link" style="font-size:1.4rem; padding:0.2rem 0.5rem;">✕</button>
+        </div>
+        <p class="muted" style="margin:0;">${when.toLocaleString()}</p>
+        <button id="visitPinNameBtn" class="btn-link" style="padding:0; font-weight:600; font-size:1rem; text-align:left;">📍 ${escapeHtml(visit.pins?.title || "Pin")}</button>
+        ${visit.notes ? `<p style="margin:0;">${escapeHtml(visit.notes)}</p>` : ""}
+        <div id="visitSharedWith" class="muted" style="margin:0;"></div>
         <div class="row">
-          <a href="pin.html?id=${visit.pin_id}" class="btn" style="flex:1; text-align:center;">View pin</a>
+          <button id="shareVisitBtn" class="btn" style="flex:1;">Share</button>
           ${isOrganizer ? '<button id="cancelVisitBtn" class="btn btn-danger" style="flex:1;">Cancel visit</button>' : ""}
-          <button id="visitCloseBtn" class="btn" style="flex:1;">Close</button>
         </div>
       </div>
     `;
@@ -482,12 +488,38 @@ if (session) {
       if (e.target === backdrop) close();
     });
     backdrop.querySelector("#visitCloseBtn").addEventListener("click", close);
+    backdrop.querySelector("#visitPinNameBtn").addEventListener("click", () => {
+      openPinDetail(visit.pin_id, {});
+    });
     backdrop.querySelector("#cancelVisitBtn")?.addEventListener("click", async () => {
       if (!confirm("Cancel this planned visit?")) return;
       await supabase.from("visits").delete().eq("id", visit.id);
       close();
       switchView(viewMode);
     });
+    backdrop.querySelector("#shareVisitBtn").addEventListener("click", async () => {
+      const { data } = await supabase.from("visits").select("share_token").eq("id", visit.id).single();
+      const url = `${window.location.origin}/invite.html?token=${data.share_token}`;
+      const shareData = { title: "Hidden Gem — Visit", text: `Join me for ${visit.pins?.title || "a visit"}!`, url };
+      if (navigator.share) {
+        try {
+          await navigator.share(shareData);
+        } catch {
+          // user cancelled the share sheet
+        }
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        alert("Link copied to clipboard.");
+      }
+    });
+
+    const { data: participants } = await supabase
+      .from("visit_participants")
+      .select("user_id, profiles(username)")
+      .eq("visit_id", visit.id)
+      .not("user_id", "is", null);
+    const names = (participants || []).map((p) => p.profiles?.username).filter(Boolean);
+    backdrop.querySelector("#visitSharedWith").textContent = names.length ? `Shared with: ${names.join(", ")}` : "";
   }
 
   // ============================================================

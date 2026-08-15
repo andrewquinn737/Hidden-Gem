@@ -1,12 +1,38 @@
 import { supabase } from "./supabaseClient.js";
+import { cropImageToAspect } from "./imageCrop.js";
 
-const MAX_PHOTOS = 5;
+const MAX_PHOTOS = 3;
 const CATEGORIES = ["Camping", "Hiking", "Urban Exploring", "Cliff Jumping", "Roof", "Beach"];
 
-// lat/lng is required for a new pin (it comes from wherever the user
-// long-pressed on the map) and is not editable inline in this form —
-// changing an existing pin's location happens via the "Change location on
-// map" button below, which briefly hands off to the Map page.
+async function ensureLeaflet() {
+  if (window.L) return;
+  if (!document.querySelector("link[data-leaflet]")) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    link.setAttribute("data-leaflet", "1");
+    document.head.appendChild(link);
+  }
+  if (!document.querySelector("script[data-leaflet]")) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.setAttribute("data-leaflet", "1");
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+}
+
+function locationIcon() {
+  const svg = `<svg width="28" height="40" viewBox="0 0 28 40" xmlns="http://www.w3.org/2000/svg"><path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.3 21.7 0 14 0z" fill="#b5651d" stroke="#fff" stroke-width="1.5"/><circle cx="14" cy="14" r="5" fill="#fff"/></svg>`;
+  return L.divIcon({ className: "custom-pin-icon", html: svg, iconSize: [28, 40], iconAnchor: [14, 40] });
+}
+
+// A small map + editable coordinate fields live inside the form, kept in
+// sync both ways: click the map to set the marker (fills the coordinate
+// inputs), or type coordinates directly (moves the marker).
 export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   const isEdit = !!editingPin;
   let pinLat, pinLng;
@@ -18,8 +44,6 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
     pinLat = lat;
     pinLng = lng;
   } else if (navigator.geolocation) {
-    // No location was handed in (e.g. Profile's "+ Add pin") — fall back
-    // to the device's current position rather than leaving it unset.
     const pos = await new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (p) => resolve(p),
@@ -66,26 +90,22 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
           </select>
         </div>
 
-        <div class="row-between">
-          <span class="muted">📍 ${pinLat.toFixed(5)}, ${pinLng.toFixed(5)}</span>
-          ${isEdit ? '<button type="button" id="pinChangeLocationBtn" class="btn-link" style="padding:0;">Change location on map</button>' : ""}
+        <div>
+          <label class="field-label">Location</label>
+          <div id="pinLocationMap" style="height:180px; border-radius: var(--radius); overflow:hidden;"></div>
+          <div class="row" style="margin-top:0.5rem;">
+            <input id="pinLat" type="number" step="any" placeholder="Latitude" value="${pinLat}" />
+            <input id="pinLng" type="number" step="any" placeholder="Longitude" value="${pinLng}" />
+          </div>
         </div>
 
         <div>
           <label class="field-label">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
           <div id="pinPhotoPreviews" class="photo-grid" style="margin-bottom:0.5rem;"></div>
-          <div id="pinPhotoDropzone" class="stack" style="border:2px dashed var(--border); border-radius: var(--radius); padding:0.75rem; text-align:center;">
-            <input id="pinPhotosInput" type="file" accept="image/*" multiple />
-            <p class="muted" style="margin:0; font-size:0.8rem;" id="pinDropHint"></p>
-            <button type="button" id="pinChooseExistingBtn" class="btn">Choose from your photos</button>
-          </div>
-          <div id="pinExistingPicker" class="stack" style="display:none; margin-top:0.5rem;">
-            <div id="pinExistingPickerGrid" class="photo-grid"></div>
-            <div class="row">
-              <button type="button" id="pinExistingPickerCancel" class="btn" style="flex:1;">Cancel</button>
-              <button type="button" id="pinExistingPickerAdd" class="btn btn-primary" style="flex:1;">Add selected</button>
-            </div>
-          </div>
+          <label class="btn" style="display:block; text-align:center;">
+            Choose photos
+            <input id="pinPhotosInput" type="file" accept="image/*" multiple style="display:none;" />
+          </label>
         </div>
 
         <label class="row">
@@ -110,53 +130,63 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
     if (e.target === backdrop) close();
   });
   backdrop.querySelector("#pinCancelBtn").addEventListener("click", close);
-  backdrop.querySelector("#pinChangeLocationBtn")?.addEventListener("click", () => {
-    window.location.href = `index.html?repositionPinId=${editingPin.id}`;
-  });
 
-  // New photo selection with removable previews, capped at MAX_PHOTOS total
-  // (existing photos, minus any removed, plus newly added ones, plus any
-  // reused from the user's other pins).
+  // Embedded location picker — click the map or type coordinates, either
+  // one updates the other.
+  const latInput = backdrop.querySelector("#pinLat");
+  const lngInput = backdrop.querySelector("#pinLng");
+  await ensureLeaflet();
+  const miniMap = L.map(backdrop.querySelector("#pinLocationMap"), { zoomControl: false }).setView([pinLat, pinLng], 14);
+  L.control.zoom({ position: "bottomright" }).addTo(miniMap);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "" }).addTo(miniMap);
+  let marker = L.marker([pinLat, pinLng], { icon: locationIcon() }).addTo(miniMap);
+  setTimeout(() => miniMap.invalidateSize(), 0);
+
+  miniMap.on("click", (e) => {
+    pinLat = e.latlng.lat;
+    pinLng = e.latlng.lng;
+    marker.setLatLng(e.latlng);
+    latInput.value = pinLat.toFixed(6);
+    lngInput.value = pinLng.toFixed(6);
+  });
+  function syncFromInputs() {
+    const lat = parseFloat(latInput.value);
+    const lng = parseFloat(lngInput.value);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      pinLat = lat;
+      pinLng = lng;
+      marker.setLatLng([lat, lng]);
+      miniMap.setView([lat, lng]);
+    }
+  }
+  latInput.addEventListener("change", syncFromInputs);
+  lngInput.addEventListener("change", syncFromInputs);
+
+  // Photo selection with removable previews, capped at MAX_PHOTOS total.
+  // Every newly-added photo is cropped to a fixed aspect ratio first so all
+  // posts share the same framing.
   let photoFiles = [];
-  let reusedPhotoPaths = []; // storage paths picked from "Choose from your photos"
   const photosInput = backdrop.querySelector("#pinPhotosInput");
   const previewsEl = backdrop.querySelector("#pinPhotoPreviews");
-  const dropzone = backdrop.querySelector("#pinPhotoDropzone");
-  const dropHint = backdrop.querySelector("#pinDropHint");
-  if (document.documentElement.classList.contains("is-desktop-device")) {
-    dropHint.textContent = "Drag photos here, or:";
-  }
 
   function slotsUsed() {
-    return existingPhotos.length + photoFiles.length + reusedPhotoPaths.length;
+    return existingPhotos.length + photoFiles.length;
   }
 
-  function addFiles(fileList) {
+  async function addFiles(fileList) {
     const incoming = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
-    const room = MAX_PHOTOS - slotsUsed();
-    if (incoming.length > room) {
-      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${Math.max(room, 0)} of your new selection were added.`);
+    for (const file of incoming) {
+      if (slotsUsed() >= MAX_PHOTOS) {
+        alert(`You can add up to ${MAX_PHOTOS} photos.`);
+        break;
+      }
+      const cropped = await cropImageToAspect(file);
+      if (cropped) {
+        photoFiles.push(cropped);
+        await renderPreviews();
+      }
     }
-    photoFiles = photoFiles.concat(incoming.slice(0, Math.max(room, 0)));
-    renderPreviews();
   }
-
-  ["dragover", "dragenter"].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.style.borderColor = "var(--accent)";
-    })
-  );
-  ["dragleave", "dragend"].forEach((evt) =>
-    dropzone.addEventListener(evt, () => {
-      dropzone.style.borderColor = "var(--border)";
-    })
-  );
-  dropzone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropzone.style.borderColor = "var(--border)";
-    addFiles(e.dataTransfer?.files);
-  });
 
   async function renderPreviews() {
     previewsEl.innerHTML = "";
@@ -175,26 +205,6 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       removeBtn.addEventListener("click", () => {
         removedPhotoIds.push(photo.id);
         existingPhotos = existingPhotos.filter((p) => p.id !== photo.id);
-        renderPreviews();
-      });
-      wrap.appendChild(img);
-      wrap.appendChild(removeBtn);
-      previewsEl.appendChild(wrap);
-    }
-
-    for (const path of reusedPhotoPaths) {
-      const wrap = document.createElement("div");
-      wrap.style.position = "relative";
-      const img = document.createElement("img");
-      const { data } = await supabase.storage.from("media").createSignedUrl(path, 3600);
-      img.src = data?.signedUrl || "";
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.textContent = "×";
-      removeBtn.style.cssText =
-        "position:absolute; top:2px; right:2px; width:20px; height:20px; padding:0; line-height:1; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; border:none;";
-      removeBtn.addEventListener("click", () => {
-        reusedPhotoPaths = reusedPhotoPaths.filter((p) => p !== path);
         renderPreviews();
       });
       wrap.appendChild(img);
@@ -231,80 +241,9 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   }
   await renderPreviews();
 
-  photosInput.addEventListener("change", () => {
-    addFiles(photosInput.files);
+  photosInput.addEventListener("change", async () => {
+    await addFiles(photosInput.files);
     photosInput.value = "";
-  });
-
-  // "Choose from your photos" — reuse a photo already uploaded to one of
-  // your other pins, without re-uploading it from your device.
-  const chooseExistingBtn = backdrop.querySelector("#pinChooseExistingBtn");
-  const existingPicker = backdrop.querySelector("#pinExistingPicker");
-  const existingPickerGrid = backdrop.querySelector("#pinExistingPickerGrid");
-  let pickerSelected = new Set();
-
-  chooseExistingBtn.addEventListener("click", async () => {
-    existingPicker.style.display = existingPicker.style.display === "none" ? "flex" : "none";
-    if (existingPicker.style.display === "none") return;
-
-    existingPickerGrid.innerHTML = '<p class="muted">Loading…</p>';
-    pickerSelected = new Set();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const { data: myPhotos } = await supabase
-      .from("pin_photos")
-      .select("id, storage_path, pins!inner(owner_id)")
-      .eq("pins.owner_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(30);
-
-    if (!myPhotos?.length) {
-      existingPickerGrid.innerHTML = '<p class="muted">You haven\'t uploaded any photos yet.</p>';
-      return;
-    }
-
-    const { data: signed } = await supabase.storage.from("media").createSignedUrls(
-      myPhotos.map((p) => p.storage_path),
-      3600
-    );
-    const signedByPath = {};
-    (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
-
-    existingPickerGrid.innerHTML = "";
-    myPhotos.forEach((photo) => {
-      const wrap = document.createElement("div");
-      wrap.style.cssText = "position:relative; cursor:pointer; border-radius:8px; overflow:hidden;";
-      const img = document.createElement("img");
-      img.src = signedByPath[photo.storage_path] || "";
-      img.style.cssText = "width:100%; aspect-ratio:1; object-fit:cover; display:block;";
-      wrap.appendChild(img);
-      wrap.addEventListener("click", () => {
-        if (pickerSelected.has(photo.storage_path)) {
-          pickerSelected.delete(photo.storage_path);
-          wrap.style.outline = "none";
-        } else {
-          pickerSelected.add(photo.storage_path);
-          wrap.style.outline = "3px solid var(--accent)";
-        }
-      });
-      existingPickerGrid.appendChild(wrap);
-    });
-  });
-
-  backdrop.querySelector("#pinExistingPickerCancel").addEventListener("click", () => {
-    existingPicker.style.display = "none";
-  });
-  backdrop.querySelector("#pinExistingPickerAdd").addEventListener("click", () => {
-    const room = MAX_PHOTOS - slotsUsed();
-    const picked = Array.from(pickerSelected);
-    if (picked.length > room) {
-      alert(`You can add up to ${MAX_PHOTOS} photos — only the first ${Math.max(room, 0)} selected were added.`);
-    }
-    reusedPhotoPaths = reusedPhotoPaths.concat(picked.slice(0, Math.max(room, 0)));
-    existingPicker.style.display = "none";
-    renderPreviews();
   });
 
   backdrop.querySelector("#pinForm").addEventListener("submit", async (e) => {
@@ -329,7 +268,7 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       if (isEdit) {
         const { data, error: updateError } = await supabase
           .from("pins")
-          .update({ title, description, directions, category, visibility })
+          .update({ title, description, directions, category, visibility, lat: pinLat, lng: pinLng })
           .eq("id", editingPin.id)
           .select()
           .single();
@@ -356,18 +295,6 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
         const { error: uploadError } = await supabase.storage.from("media").upload(path, file);
         if (uploadError) throw uploadError;
         await supabase.from("pin_photos").insert({ pin_id: pin.id, storage_path: path });
-      }
-
-      // Reused photos are copied server-side into this pin's own storage
-      // path rather than re-uploaded — cheap, and keeps storage RLS (which
-      // is scoped by the pin id embedded in the path) correctly matching
-      // *this* pin's own visibility instead of the pin the photo came from.
-      for (let i = 0; i < reusedPhotoPaths.length; i++) {
-        const ext = reusedPhotoPaths[i].split(".").pop();
-        const newPath = `pins/${pin.id}/${Date.now()}-reused-${i}.${ext}`;
-        const { error: copyError } = await supabase.storage.from("media").copy(reusedPhotoPaths[i], newPath);
-        if (copyError) throw copyError;
-        await supabase.from("pin_photos").insert({ pin_id: pin.id, storage_path: newPath });
       }
 
       if (!isEdit) {

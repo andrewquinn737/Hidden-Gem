@@ -18,22 +18,29 @@ async function render() {
   let kind = "pin";
   let { data: pinInvite } = await supabase.rpc("get_pin_invite_by_token", { p_token: token }).maybeSingle();
   let visitInvite = null;
+  let visitShare = null;
   if (!pinInvite) {
     kind = "visit";
     const res = await supabase.rpc("get_visit_invite_by_token", { p_token: token }).maybeSingle();
     visitInvite = res.data;
   }
-
   if (!pinInvite && !visitInvite) {
+    kind = "visit_share";
+    const res = await supabase.rpc("get_visit_by_share_token", { p_token: token }).maybeSingle();
+    visitShare = res.data;
+  }
+
+  if (!pinInvite && !visitInvite && !visitShare) {
     root.innerHTML = '<p class="error-text">This invite link is invalid or has expired.</p>';
     return;
   }
 
-  const title = kind === "pin" ? pinInvite.pin_title : visitInvite.pin_title;
+  const title = kind === "pin" ? pinInvite.pin_title : kind === "visit" ? visitInvite.pin_title : visitShare.pin_title;
+  const visitDetails = visitInvite || visitShare;
   const description =
     kind === "pin"
       ? pinInvite.pin_description
-      : `Planned for ${new Date(visitInvite.scheduled_at).toLocaleString()}${visitInvite.notes ? " — " + visitInvite.notes : ""}`;
+      : `Planned for ${new Date(visitDetails.scheduled_at).toLocaleString()}${visitDetails.notes ? " — " + visitDetails.notes : ""}${kind === "visit_share" ? ` (shared by ${visitShare.organizer_username})` : ""}`;
 
   root.innerHTML = `
     <div class="card stack">
@@ -54,14 +61,19 @@ async function render() {
       </div>
     `;
   } else {
-    actionEl.innerHTML = `<button id="acceptBtn" class="btn btn-primary">Accept & view</button>`;
+    const label = kind === "pin" ? "Accept & view" : "Add to my calendar";
+    actionEl.innerHTML = `<button id="acceptBtn" class="btn btn-primary">${label}</button>`;
     document.getElementById("acceptBtn").addEventListener("click", async () => {
       if (kind === "pin") {
         const { data, error } = await supabase.rpc("accept_pin_invite", { p_token: token }).single();
         if (error) return alert(error.message);
         window.location.href = `pin.html?id=${data.pin_id}`;
-      } else {
+      } else if (kind === "visit") {
         const { error } = await supabase.rpc("accept_visit_invite", { p_token: token }).single();
+        if (error) return alert(error.message);
+        window.location.href = "scheduler.html";
+      } else {
+        const { error } = await supabase.rpc("accept_visit_share", { p_token: token }).single();
         if (error) return alert(error.message);
         window.location.href = "scheduler.html";
       }

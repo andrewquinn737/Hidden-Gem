@@ -52,7 +52,7 @@
 <script type="module">
   import { supabase } from "./js/supabaseClient.js";
 
-  const redirectTarget = new URLSearchParams(window.location.search).get("redirect") || "index.html";
+  const redirectTarget = new URLSearchParams(window.location.search).get("redirect") || "profile.html";
 
   const { data: { session } } = await supabase.auth.getSession();
   if (session) window.location.href = redirectTarget;

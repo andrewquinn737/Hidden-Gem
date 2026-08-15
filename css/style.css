@@ -155,6 +155,16 @@ html.is-mobile-device main { padding-bottom: 5.5rem; }
 
 html.is-desktop-device .bottom-tabbar { display: none; }
 
+.topnav-mobile-brand {
+  display: none;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+html.is-mobile-device .topnav-mobile-brand { display: block; }
+html.is-desktop-device .topnav-mobile-brand { display: none; }
+
 /* ============================================================
    List views — table on desktop, card list on mobile.
    Both markups exist in the DOM; CSS just toggles which shows.
@@ -180,7 +190,7 @@ html.is-mobile-device .list-table { display: none; }
                  their own stacking context so they can't cover UI outside
                  #map, like .map-toolbar below */
 }
-html.is-mobile-device #map { height: calc(100vh - 4.5rem - 4.5rem); }
+html.is-mobile-device #map { height: calc(100vh - 4.5rem); }
 
 .leaflet-popup-content { color: #1a1a1a; }
 .custom-pin-icon { background: none; border: none; }
@@ -206,7 +216,7 @@ html.is-desktop-device .modal-backdrop { align-items: center; }
 html.is-desktop-device .modal { border-radius: var(--radius); }
 
 .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
-.photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+.photo-grid img { width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 8px; }
 
 .field-label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
 
@@ -361,8 +371,37 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
    detail modal (wrapped). See js/postCard.js.
    ============================================================ */
 .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.post-header { display: flex; align-items: center; padding: 0.7rem 0.85rem; gap: 0.6rem; }
-.post-title { font-weight: 700; margin-right: auto; }
+/* .post-card's overflow:hidden shorthand would otherwise clobber
+   .pin-detail-modal's own overflow-y:auto (same specificity, later rule
+   wins) and defeats sticky positioning in .modal-full (sticky needs the
+   scrolling ancestor itself, not a clipped non-scrolling wrapper) — both
+   contexts reuse .post-card on the same element, so override explicitly. */
+.pin-detail-modal.post-card { overflow-x: hidden; overflow-y: auto; }
+.modal-full.post-card { overflow: visible; }
+.post-header {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  gap: 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface);
+}
+.post-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.post-header-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.post-header-end { display: flex; align-items: center; justify-content: flex-end; gap: 0.2rem; }
+.post-drag-handle {
+  display: none;
+  width: 36px; height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: grab;
+  touch-action: none;
+}
+html.is-mobile-device .pin-detail-modal .post-drag-handle { display: block; }
+html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-menu-btn, .post-close-btn {
   background: none; border: none; font-size: 1.3rem; padding: 0.2rem 0.4rem; cursor: pointer; color: var(--text); line-height: 1;
 }
@@ -372,18 +411,46 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
 }
-.post-carousel img { flex: 0 0 100%; scroll-snap-align: start; width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.post-carousel img { flex: 0 0 100%; scroll-snap-align: start; width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
 .post-carousel .feed-post-photo-placeholder { flex: 0 0 100%; scroll-snap-align: start; }
+.feed-post-photo-placeholder { aspect-ratio: 4/5; }
 .post-photo-counter { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 0.3rem 0 0; }
 .post-actions { display: flex; align-items: center; gap: 0.9rem; padding: 0.5rem 0.85rem; font-size: 1.2rem; }
 .post-actions button, .post-actions a { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); font-size: inherit; text-decoration: none; }
 .post-actions button.liked { color: var(--accent); }
+.post-actions button.saved { color: var(--accent); }
 .post-map-btn { margin-left: auto; }
 .post-body { padding: 0.3rem 0.85rem 0.85rem; }
-.post-description { margin: 0; white-space: pre-wrap; }
-.post-description.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.post-caption { margin: 0; white-space: pre-wrap; }
+.post-owner-avatar-btn { display: inline-flex; vertical-align: middle; padding: 0; border: none; background: none; cursor: pointer; margin-right: 0.35rem; }
+.post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
+.post-owner-name { padding: 0; font-weight: 600; color: var(--text); vertical-align: middle; margin-right: 0.3rem; }
+.post-caption.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; margin-top: 0.2rem; }
 .post-full-details { margin-top: 0.6rem; }
+.post-directions { margin: 0; }
 .post-comments-section { padding: 0 0.85rem 0.85rem; }
+
+/* Bottom-sheet grow/shrink via the drag handle — see js/postCard.js */
+html.is-mobile-device .pin-detail-modal { transition: max-height 0.2s ease, height 0.2s ease, border-radius 0.2s ease; }
+html.is-mobile-device .pin-detail-modal.sheet-full {
+  height: 100vh; max-height: 100vh; border-radius: 0;
+}
+
+/* ============================================================
+   Photo crop tool (js/imageCrop.js)
+   ============================================================ */
+.crop-modal { max-width: 360px; }
+.crop-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4/5;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  touch-action: none;
+  cursor: grab;
+}
+.crop-img { position: absolute; top: 0; left: 0; max-width: none; user-select: none; }
 
 .error-text { color: var(--danger); font-size: 0.9rem; }
