@@ -51,7 +51,13 @@ button, .btn {
   color: var(--text);
   padding: 0.6rem 1rem;
   cursor: pointer;
+  transition: opacity 0.1s ease;
 }
+/* Native-app-style tap feedback — a quick opacity dim on press, same idea
+   as iOS's default touch highlight. Kept off drag/pinch surfaces (the
+   sheet drag handle, calendar hour slots) since those already have their
+   own press semantics and a flicker here would fight the gesture. */
+button:active, .btn:active { opacity: 0.6; }
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -225,8 +231,12 @@ html.is-mobile-device #map { height: 100vh; }
      notifications are routinely opened from within an already-open
      fullscreen pin view and must stack above it, not underneath it. */
   z-index: 300;
+  animation: modal-backdrop-fade-in 0.15s ease;
 }
 html.is-desktop-device .modal-backdrop { align-items: center; }
+@keyframes modal-backdrop-fade-in { from { background-color: rgba(0,0,0,0); } }
+@keyframes modal-sheet-slide-in { from { transform: translateY(12px); opacity: 0; } }
+.modal-backdrop > .modal { animation: modal-sheet-slide-in 0.18s ease; }
 .modal {
   background: var(--surface);
   border-radius: var(--radius) var(--radius) 0 0;
