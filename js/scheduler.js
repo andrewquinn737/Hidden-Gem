@@ -17,6 +17,28 @@ if (session) {
   let draftEvent = null; // { pinId, pinTitle, hour, minute } — null pinId means "needs a pin"
   let visitsCache = []; // visits currently loaded for the visible range
 
+  // Day-view touch/pointer gesture state (swipe, long-press-to-create,
+  // pinch-to-zoom) — hoisted out of setupDayGestures() so it can be reset
+  // from elsewhere (opening/dismissing the confirm-draft modal). Without
+  // an explicit reset, a long-press that hands off to the modal mid-touch
+  // can leave a pointer "stuck" registered (its pointerup/pointercancel
+  // never reaches the grid once the modal covers it), which then blocks
+  // every future pinch/long-press because activePointers never empties.
+  const activeDayPointers = new Map(); // pointerId -> {x, y}
+  let dayPointerStart = null;
+  let dayLongPressTimer = null;
+  let dayLongPressFired = false;
+  let dayPinchStartDist = null;
+  let dayPinchStartRowHeight = null;
+  function resetDayGestureState() {
+    clearTimeout(dayLongPressTimer);
+    activeDayPointers.clear();
+    dayPointerStart = null;
+    dayLongPressFired = false;
+    dayPinchStartDist = null;
+    dayPinchStartRowHeight = null;
+  }
+
   const params = new URLSearchParams(window.location.search);
   const prefillPinId = params.get("pinId");
   if (prefillPinId) {
@@ -123,11 +145,22 @@ if (session) {
     target?.scrollIntoView({ block: "start" });
   }
 
+  // The hour rows are pinch-zoomable (--hour-row-height), so a chip's
+  // within-the-hour vertical offset has to be computed from that live
+  // value rather than a fixed pixel guess — otherwise a 4:15 chip visually
+  // sits flush at the top of the "4 PM" row exactly like a 4:00 one would,
+  // even though its label correctly says :15.
+  function hourRowHeightPx() {
+    const val = parseFloat(getComputedStyle(document.getElementById("dayView")).getPropertyValue("--hour-row-height"));
+    return val || 48;
+  }
+
   function renderEventChip(visit) {
     const chip = document.createElement("div");
     chip.className = "calendar-event";
     const d = new Date(visit.scheduled_at);
     chip.textContent = `${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${visit.pins?.title ?? "Pin"}`;
+    chip.style.marginTop = `${(d.getMinutes() / 60) * hourRowHeightPx()}px`;
 
     const isOrganizer = visit.organizer_id === session.user.id;
     let justDragged = false;
@@ -201,6 +234,7 @@ if (session) {
     const label = draftEvent.pinTitle || "New event — pick a pin";
     const timeLabel = formatHourMinute(draftEvent.hour, draftEvent.minute);
     chip.textContent = `${timeLabel} · ${label}`;
+    chip.style.marginTop = `${(draftEvent.minute / 60) * hourRowHeightPx()}px`;
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       openConfirmDraftModal();
@@ -213,13 +247,6 @@ if (session) {
   // taller/shorter. Pointer Events unify mouse + touch.
   function setupDayGestures() {
     const grid = document.getElementById("dayView");
-    let pointerStart = null;
-    let longPressTimer = null;
-    let longPressFired = false;
-
-    const activePointers = new Map(); // pointerId -> {x, y}
-    let pinchStartDist = null;
-    let pinchStartRowHeight = null;
     const MIN_ROW = 30;
     const MAX_ROW = 140;
 
@@ -228,38 +255,44 @@ if (session) {
       return val || 48;
     }
     function pointerDistance() {
-      const pts = Array.from(activePointers.values());
+      const pts = Array.from(activeDayPointers.values());
       if (pts.length < 2) return null;
       return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
     }
 
     grid.addEventListener("pointerdown", (e) => {
-      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (activePointers.size === 2) {
+      activeDayPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activeDayPointers.size === 2) {
         // A second finger landed — abandon any single-finger gesture in
         // progress and start tracking the pinch instead.
-        clearTimeout(longPressTimer);
-        pointerStart = null;
-        pinchStartDist = pointerDistance();
-        pinchStartRowHeight = currentRowHeight();
+        clearTimeout(dayLongPressTimer);
+        dayPointerStart = null;
+        dayPinchStartDist = pointerDistance();
+        dayPinchStartRowHeight = currentRowHeight();
         return;
       }
-      if (activePointers.size > 1) return;
+      if (activeDayPointers.size > 1) return;
 
       if (e.target.closest(".calendar-event")) return;
       const slot = e.target.closest(".cal-hour-slot");
-      pointerStart = {
+      dayPointerStart = {
         x: e.clientX,
         y: e.clientY,
         time: Date.now(),
         hour: slot ? Number(slot.dataset.hour) : null,
         minute: slot ? quarterHourFromPointer(slot, e.clientY) : 0,
       };
-      longPressFired = false;
-      longPressTimer = setTimeout(async () => {
-        if (pointerStart && pointerStart.hour != null) {
-          longPressFired = true;
-          draftEvent = { pinId: null, pinTitle: null, hour: pointerStart.hour, minute: pointerStart.minute };
+      dayLongPressFired = false;
+      dayLongPressTimer = setTimeout(async () => {
+        if (dayPointerStart && dayPointerStart.hour != null) {
+          dayLongPressFired = true;
+          draftEvent = { pinId: null, pinTitle: null, hour: dayPointerStart.hour, minute: dayPointerStart.minute };
+          // Handing off to the confirm modal now — the pointer that's
+          // still technically down won't reliably deliver its
+          // pointerup/pointercancel back to this grid once the modal
+          // backdrop covers it, so clear the gesture state proactively
+          // instead of waiting on an event that might not come.
+          resetDayGestureState();
           await renderDayView(true);
           openConfirmDraftModal();
         }
@@ -267,52 +300,44 @@ if (session) {
     });
 
     grid.addEventListener("pointermove", (e) => {
-      if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activeDayPointers.has(e.pointerId)) activeDayPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      if (activePointers.size === 2 && pinchStartDist) {
+      if (activeDayPointers.size === 2 && dayPinchStartDist) {
         const dist = pointerDistance();
         if (!dist) return;
-        const scale = dist / pinchStartDist;
-        const newHeight = Math.min(MAX_ROW, Math.max(MIN_ROW, pinchStartRowHeight * scale));
+        const scale = dist / dayPinchStartDist;
+        const newHeight = Math.min(MAX_ROW, Math.max(MIN_ROW, dayPinchStartRowHeight * scale));
         grid.style.setProperty("--hour-row-height", `${newHeight}px`);
         return;
       }
 
-      if (!pointerStart) return;
-      const dx = Math.abs(e.clientX - pointerStart.x);
-      const dy = Math.abs(e.clientY - pointerStart.y);
-      if (dx > 10 || dy > 10) clearTimeout(longPressTimer);
+      if (!dayPointerStart) return;
+      const dx = Math.abs(e.clientX - dayPointerStart.x);
+      const dy = Math.abs(e.clientY - dayPointerStart.y);
+      if (dx > 10 || dy > 10) clearTimeout(dayLongPressTimer);
     });
 
     const releasePointer = (e) => {
-      activePointers.delete(e.pointerId);
-      if (activePointers.size < 2) {
-        pinchStartDist = null;
-        pinchStartRowHeight = null;
+      activeDayPointers.delete(e.pointerId);
+      if (activeDayPointers.size < 2) {
+        dayPinchStartDist = null;
+        dayPinchStartRowHeight = null;
       }
-      clearTimeout(longPressTimer);
-      if (longPressFired || !pointerStart) {
-        pointerStart = null;
+      clearTimeout(dayLongPressTimer);
+      if (dayLongPressFired || !dayPointerStart) {
+        dayPointerStart = null;
         return;
       }
-      const dx = e.clientX - pointerStart.x;
-      const dt = Date.now() - pointerStart.time;
+      const dx = e.clientX - dayPointerStart.x;
+      const dt = Date.now() - dayPointerStart.time;
       if (Math.abs(dx) > 60 && dt < 800) {
         changeDay(dx > 0 ? -1 : 1);
       }
-      pointerStart = null;
+      dayPointerStart = null;
     };
 
     grid.addEventListener("pointerup", releasePointer);
-    grid.addEventListener("pointercancel", (e) => {
-      activePointers.delete(e.pointerId);
-      if (activePointers.size < 2) {
-        pinchStartDist = null;
-        pinchStartRowHeight = null;
-      }
-      clearTimeout(longPressTimer);
-      pointerStart = null;
-    });
+    grid.addEventListener("pointercancel", () => resetDayGestureState());
   }
 
   // ============================================================
@@ -480,6 +505,7 @@ if (session) {
   // Confirm-draft modal — finalizes a draft into a real visit
   // ============================================================
   async function openConfirmDraftModal() {
+    if (!draftEvent) return;
     const needsPin = !draftEvent.pinId;
     let searchablePins = [];
     if (needsPin) {
@@ -537,6 +563,7 @@ if (session) {
     const dismiss = () => {
       backdrop.remove();
       draftEvent = null;
+      resetDayGestureState();
       switchView(viewMode);
     };
     backdrop.addEventListener("click", (e) => {
@@ -603,6 +630,7 @@ if (session) {
       }
 
       draftEvent = null;
+      resetDayGestureState();
       backdrop.remove();
       currentDate = startOfDay(scheduledAt);
       switchView("day");

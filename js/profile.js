@@ -321,15 +321,16 @@ if (session) {
     });
 
     if (!pins.length) {
-      const empty = document.createElement("p");
-      empty.className = "muted";
-      empty.style.gridColumn = "1 / -1";
-      empty.textContent =
+      const empty = document.createElement("div");
+      empty.className = "stack";
+      empty.style.cssText = "grid-column: 1 / -1; align-items: center; text-align: center; padding: 2rem 1rem; gap: 0.5rem; color: var(--text-muted);";
+      const text =
         gridView === "saved"
           ? "No saved posts yet."
           : isOwnProfile
           ? "No pins yet — open the ⋯ menu above and tap \"Add pin\" to add your first one."
           : "No pins to show.";
+      empty.innerHTML = `<span style="width:40px; height:40px;">${MAP_OUTLINE_SVG}</span><p class="muted" style="margin:0;">${escapeHtml(text)}</p>`;
       gridEl.appendChild(empty);
     }
   }

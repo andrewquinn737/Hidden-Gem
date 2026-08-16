@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { setupSheetDrag } from "./sheetDrag.js";
 import { MAP_OUTLINE_SVG, avatarPlaceholderHtml } from "./placeholders.js";
+import { reverseGeocodeLabel } from "./geoReverse.js";
 
 const PIN_SELECT =
   "id, title, description, directions, category, owner_id, lat, lng, pin_photos(storage_path, created_at), pin_likes(user_id), pin_saves(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)";
@@ -98,25 +99,30 @@ export async function renderPostCard(pin, container, options = {}) {
   const captionLong = !startFull && descriptionText.length + directionsText.length > 140;
 
   card.innerHTML = `
-    <div class="post-header">
-      <button class="btn-link post-title" style="padding:0; text-align:left;">${escapeHtml(pin.title)}</button>
+    <div class="post-header post-header-stacked">
       <div class="post-header-center">
         <span class="post-drag-handle" aria-hidden="true"></span>
       </div>
-      <div class="post-header-end">
-        ${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}
-        <div class="post-menu-wrap" style="position:relative;">
-          <button class="post-menu-btn" aria-label="Post menu">⋯</button>
-          <div class="post-menu-dropdown card stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:160px; padding:0.4rem; gap:0.25rem;">
-            <button class="btn post-schedule-btn" style="width:100%; text-align:left; border:none;">Schedule visit</button>
-            ${
-              ownerMenuEnabled && isOwner
-                ? '<button class="btn post-share-btn" style="width:100%; text-align:left; border:none;">Share</button><button class="btn post-edit-btn" style="width:100%; text-align:left; border:none;">Edit</button><button class="btn btn-danger post-delete-btn" style="width:100%; text-align:left; border:none;">Delete</button>'
-                : ""
-            }
-          </div>
+      <div class="post-header-title-row">
+        <div class="post-title-block">
+          <button class="btn-link post-title" style="padding:0; text-align:left;">${escapeHtml(pin.title)}</button>
+          <div class="post-location-label"></div>
         </div>
-        ${onClose ? '<button class="post-close-btn" aria-label="Close">✕</button>' : ""}
+        <div class="post-header-end">
+          ${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}
+          <div class="post-menu-wrap" style="position:relative;">
+            <button class="post-menu-btn" aria-label="Post menu">⋯</button>
+            <div class="post-menu-dropdown card stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:160px; padding:0.4rem; gap:0.25rem;">
+              <button class="btn post-schedule-btn" style="width:100%; text-align:left; border:none;">Schedule visit</button>
+              ${
+                ownerMenuEnabled && isOwner
+                  ? '<button class="btn post-share-btn" style="width:100%; text-align:left; border:none;">Share</button><button class="btn post-edit-btn" style="width:100%; text-align:left; border:none;">Edit</button><button class="btn btn-danger post-delete-btn" style="width:100%; text-align:left; border:none;">Delete</button>'
+                  : ""
+              }
+            </div>
+          </div>
+          ${onClose ? '<button class="post-close-btn" aria-label="Close">✕</button>' : ""}
+        </div>
       </div>
     </div>
 
@@ -142,6 +148,12 @@ export async function renderPostCard(pin, container, options = {}) {
     window.location.href = `profile.html?id=${pin.owner_id}&openPinId=${pin.id}`;
   });
   fitTitleText(card.querySelector(".post-title"));
+  if (Number.isFinite(pin.lat) && Number.isFinite(pin.lng)) {
+    reverseGeocodeLabel(pin.lat, pin.lng).then((label) => {
+      const el = card.querySelector(".post-location-label");
+      if (label && el) el.textContent = label;
+    });
+  }
 
   card.querySelector(".post-owner-name").addEventListener("click", () => {
     window.location.href = `profile.html?id=${pin.owner_id}`;

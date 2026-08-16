@@ -12,3 +12,4 @@ export async function searchPlace(query) {
     lng: parseFloat(r.lon),
   }));
 }
+

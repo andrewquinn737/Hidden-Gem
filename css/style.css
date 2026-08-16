@@ -497,6 +497,22 @@ html.is-mobile-device .hide-title-mobile { display: none; }
   z-index: 5;
   background: var(--surface);
 }
+/* Posts (js/postCard.js) get a two-row header instead of the plain
+   three-column one above — the drag handle sits on its own row so the
+   title and category below it aren't squeezed by the drag-handle column,
+   and can use the full width instead of shrinking/wrapping. */
+.post-header.post-header-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.post-header-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.post-title-block { flex: 1; min-width: 0; margin-top: -0.15rem; }
+.post-location-label { font-size: 0.7rem; color: var(--text-muted); margin-top: -0.05rem; min-height: 1em; }
+.post-header-title-row .post-header-end { padding-top: 0.15rem; }
+/* No drag handle to show on desktop (it closes via the ✕ instead), so
+   collapse that row instead of leaving a gap of dead space above the title. */
+html.is-desktop-device .post-header-stacked .post-header-center { display: none; }
 /* No ellipsis — js/postCard.js's fitTitleText() shrinks the font-size
    instead when the title is about to crowd the category pill, so the
    full title stays readable rather than getting cut off with "…". It's a
