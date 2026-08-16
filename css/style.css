@@ -201,12 +201,18 @@ html.is-mobile-device .list-table { display: none; }
 }
 html.is-mobile-device #map { height: 100vh; }
 
-.leaflet-popup-content { color: #1a1a1a; }
-.custom-pin-icon { background: none; border: none; }
-.map-pin-popup { align-items: center; gap: 0.6rem; cursor: pointer; min-width: 140px; }
-.map-pin-popup strong, .map-pin-popup .muted { white-space: nowrap; }
-.leaflet-popup-content-wrapper, .leaflet-popup-content { width: auto !important; }
+.map-pin-popup { align-items: center; gap: 0.6rem; cursor: pointer; min-width: 140px; padding: 0.5rem 0.65rem; }
+.map-pin-popup strong, .map-pin-popup .muted { white-space: nowrap; color: var(--text); }
 .map-pin-popup-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+/* MapLibre popup chrome — width follows content (no wrap-then-grow-tall),
+   themed to match the app instead of the library default. */
+.hg-popup .maplibregl-popup-content {
+  padding: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.hg-popup .maplibregl-popup-tip { display: none; }
 
 .modal-backdrop {
   position: fixed; inset: 0;

@@ -12,7 +12,7 @@
     document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
   })();
 </script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.8.0/dist/maplibre-gl.css" />
 <link rel="stylesheet" href="css/style.css" />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="favicon.ico" sizes="any" />
@@ -42,6 +42,14 @@
       <button type="submit" class="btn">Go</button>
     </form>
     <button id="geolocateBtn" class="btn">📍</button>
+    <div style="position:relative;">
+      <button id="mapStyleBtn" class="btn">🗺️</button>
+      <div id="mapStyleDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:41; min-width:140px; padding:0.4rem; gap:0.25rem;">
+        <button class="btn" data-map-style="street" style="width:100%; text-align:left; border:none;">Street</button>
+        <button class="btn" data-map-style="satellite" style="width:100%; text-align:left; border:none;">Satellite</button>
+        <button class="btn" data-map-style="parchment" style="width:100%; text-align:left; border:none;">Parchment</button>
+      </div>
+    </div>
   </div>
   <div id="repositionBanner" class="card row-between" style="display:none; position:absolute; top:max(0.75rem, env(safe-area-inset-top)); left:0.75rem; right:0.75rem; z-index:45;">
     <span id="repositionLabel" class="muted"></span>
@@ -55,7 +63,7 @@
   <p id="holdHint" class="muted" style="position:absolute; bottom:0.5rem; left:0; right:0; text-align:center; z-index:40; font-size:0.75rem; pointer-events:none;">Hold anywhere on the map to add a pin</p>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/maplibre-gl@5.8.0/dist/maplibre-gl.js"></script>
 <script type="module" src="js/map.js"></script>
 <script type="module" src="js/pwa.js"></script>
 </body>
