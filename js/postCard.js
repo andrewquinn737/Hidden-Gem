@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
+import { setupSheetDrag } from "./sheetDrag.js";
 
 const PIN_SELECT =
   "id, title, description, directions, category, owner_id, lat, lng, pin_photos(storage_path, created_at), pin_likes(user_id), pin_saves(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)";
@@ -33,7 +34,7 @@ const ICONS = {
 // detail modal — one component, two contexts — so the swipe/like/comment/
 // caption behavior only has to be built and tested once.
 export async function renderPostCard(pin, container, options = {}) {
-  const { currentUserId, onChange, ownerMenuEnabled = false, onClose } = options;
+  const { currentUserId, onChange, ownerMenuEnabled = false, onClose, startFull = false } = options;
   const isOwner = pin.owner_id === currentUserId;
   const likeCount = pin.pin_likes?.length ?? 0;
   const iLiked = (pin.pin_likes || []).some((l) => l.user_id === currentUserId);
@@ -94,8 +95,6 @@ export async function renderPostCard(pin, container, options = {}) {
         ? `<div class="post-carousel">${photoUrls.map((u) => `<img src="${u}" alt="${escapeAttr(pin.title)}" draggable="false" />`).join("")}</div>`
         : `<div class="feed-post-photo-placeholder">🗺️</div>`
     }
-    ${photoUrls.length > 1 ? `<p class="post-photo-counter">1/${photoUrls.length}</p>` : ""}
-
     <div class="post-actions">
       <button class="post-like-btn icon-btn ${iLiked ? "active" : ""}" aria-label="Like">${ICONS.like(iLiked)}<span class="post-count">${likeCount}</span></button>
       <button class="post-comments-btn icon-btn" aria-label="Comments">${ICONS.comment}<span class="post-count">${commentCount}</span></button>
@@ -116,14 +115,7 @@ export async function renderPostCard(pin, container, options = {}) {
     window.location.href = `profile.html?id=${pin.owner_id}`;
   });
 
-  // Photo counter follows swipe/scroll
   const carousel = card.querySelector(".post-carousel");
-  const counterEl = card.querySelector(".post-photo-counter");
-  carousel?.addEventListener("scroll", () => {
-    if (!counterEl || !carousel.clientWidth) return;
-    const index = Math.round(carousel.scrollLeft / carousel.clientWidth) + 1;
-    counterEl.textContent = `${index}/${photoUrls.length}`;
-  });
 
   // Swipe-to-change-photo for pointer types that don't get native touch
   // scrolling (mouse/pen) — touch already swipes via scroll-snap above.
@@ -152,40 +144,9 @@ export async function renderPostCard(pin, container, options = {}) {
     carousel.addEventListener("pointercancel", endDrag);
   }
 
-  // Mobile bottom-sheet drag handle — only visible (via CSS) inside the
-  // half-screen .pin-detail-modal, so this is a no-op everywhere else.
-  // Drag up to grow to fullscreen, drag down to shrink back or dismiss.
-  const dragHandle = card.querySelector(".post-drag-handle");
-  if (dragHandle && onClose) {
-    let sheetDragging = false;
-    let sheetStartY = 0;
-    let startedFull = false;
-    dragHandle.addEventListener("pointerdown", (e) => {
-      sheetDragging = true;
-      sheetStartY = e.clientY;
-      startedFull = card.classList.contains("sheet-full");
-      card.style.transition = "none";
-      dragHandle.setPointerCapture(e.pointerId);
-    });
-    dragHandle.addEventListener("pointermove", (e) => {
-      if (!sheetDragging) return;
-      const dy = e.clientY - sheetStartY;
-      card.style.transform = `translateY(${startedFull ? Math.max(dy, 0) : dy}px)`;
-    });
-    const endSheetDrag = (e) => {
-      if (!sheetDragging) return;
-      sheetDragging = false;
-      card.style.transition = "";
-      card.style.transform = "";
-      const dy = e.clientY - sheetStartY;
-      if (!startedFull && dy < -60) card.classList.add("sheet-full");
-      else if (!startedFull && dy > 100) onClose();
-      else if (startedFull && dy > 250) onClose();
-      else if (startedFull && dy > 100) card.classList.remove("sheet-full");
-    };
-    dragHandle.addEventListener("pointerup", endSheetDrag);
-    dragHandle.addEventListener("pointercancel", endSheetDrag);
-  }
+  // Half-screen bottom-sheet drag — only relevant inside a popup (onClose
+  // set); see js/sheetDrag.js.
+  if (onClose) setupSheetDrag(card, { onDismiss: onClose, startFull });
 
   // 3-dot menu — "Schedule visit" is always available; Edit/Delete only
   // for the pin's own owner when the caller enables it (Discover keeps
@@ -312,36 +273,7 @@ async function openCommentsPopup(pin, currentUserId, onCountChange) {
   });
   modalEl.querySelector(".post-close-btn").addEventListener("click", close);
 
-  // Same drag-to-grow/dismiss handle behavior as the pin detail sheet.
-  const dragHandle = modalEl.querySelector(".post-drag-handle");
-  let sheetDragging = false;
-  let sheetStartY = 0;
-  let startedFull = false;
-  dragHandle.addEventListener("pointerdown", (e) => {
-    sheetDragging = true;
-    sheetStartY = e.clientY;
-    startedFull = modalEl.classList.contains("sheet-full");
-    modalEl.style.transition = "none";
-    dragHandle.setPointerCapture(e.pointerId);
-  });
-  dragHandle.addEventListener("pointermove", (e) => {
-    if (!sheetDragging) return;
-    const dy = e.clientY - sheetStartY;
-    modalEl.style.transform = `translateY(${startedFull ? Math.max(dy, 0) : dy}px)`;
-  });
-  const endSheetDrag = (e) => {
-    if (!sheetDragging) return;
-    sheetDragging = false;
-    modalEl.style.transition = "";
-    modalEl.style.transform = "";
-    const dy = e.clientY - sheetStartY;
-    if (!startedFull && dy < -60) modalEl.classList.add("sheet-full");
-    else if (!startedFull && dy > 100) close();
-    else if (startedFull && dy > 250) close();
-    else if (startedFull && dy > 100) modalEl.classList.remove("sheet-full");
-  };
-  dragHandle.addEventListener("pointerup", endSheetDrag);
-  dragHandle.addEventListener("pointercancel", endSheetDrag);
+  setupSheetDrag(modalEl, { onDismiss: close });
 
   const listEl = modalEl.querySelector(".comments-list");
 

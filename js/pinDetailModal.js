@@ -1,28 +1,20 @@
 import { supabase } from "./supabaseClient.js";
 import { fetchPin, renderPostCard } from "./postCard.js";
 
-// 2/3-height modal — used by Profile's pin grid and other "quick look"
-// entry points.
-export async function openPinDetail(pinId, { onChange } = {}) {
-  await open(pinId, { onChange, backdropClass: "modal-backdrop", contentClass: "modal pin-detail-modal" });
-}
-
-// True full-screen — used from the Map's pin popup. Closing it leaves the
-// map exactly where it was (it's just an overlay, nothing navigates away).
-export async function openPinDetailFullscreen(pinId, { onChange } = {}) {
-  await open(pinId, { onChange, backdropClass: "modal-backdrop-full", contentClass: "modal-full" });
-}
-
-async function open(pinId, { onChange, backdropClass, contentClass }) {
+// Half-screen popup (default 50vh, drag handle to expand to fullscreen or
+// dismiss) — used everywhere a pin gets viewed in a modal. Pass
+// startFull:true to open it already expanded (e.g. from Profile's grid,
+// where a "quick look" should show the whole thing right away).
+export async function openPinDetail(pinId, { onChange, startFull = false } = {}) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const backdrop = document.createElement("div");
-  backdrop.className = backdropClass;
-  backdrop.innerHTML = `<div class="${contentClass}"><p class="muted">Loading…</p></div>`;
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `<div class="modal pin-detail-modal"><p class="muted">Loading…</p></div>`;
   document.body.appendChild(backdrop);
-  const contentEl = backdrop.querySelector(`.${contentClass.split(" ").join(".")}`);
+  const contentEl = backdrop.querySelector(".pin-detail-modal");
 
   const close = () => backdrop.remove();
   backdrop.addEventListener("click", (e) => {
@@ -42,5 +34,11 @@ async function open(pinId, { onChange, backdropClass, contentClass }) {
     onChange,
     ownerMenuEnabled: true,
     onClose: close,
+    startFull,
   });
+}
+
+// Back-compat alias — same popup, just always starts expanded.
+export async function openPinDetailFullscreen(pinId, options = {}) {
+  await openPinDetail(pinId, { ...options, startFull: true });
 }

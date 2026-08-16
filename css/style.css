@@ -101,6 +101,11 @@ main {
   border: 1px solid var(--border);
   font-size: 0.8rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  max-width: 110px;
 }
 
 /* ============================================================
@@ -226,6 +231,22 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 
 .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .photo-grid img { width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 8px; }
+.photo-add-tile {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; aspect-ratio: 4/5; border-radius: 8px;
+  border: 2px dashed var(--border); color: var(--text-muted);
+  cursor: pointer;
+}
+.photo-add-tile svg { width: 28px; height: 28px; }
+.photo-add-tile:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ============================================================
+   Pin form — half-screen popup (js/pinForm.js), sticky header +
+   footer with a scrolling body between them.
+   ============================================================ */
+.pin-form-modal.pin-detail-modal { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.pin-form-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; gap: 0.85rem; }
+.pin-form-footer { padding: 0.7rem 0.85rem; border-top: 1px solid var(--border); margin: 0; }
 
 .field-label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
 
@@ -282,10 +303,13 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 }
 .notif-row {
   display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
-  width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--border);
+  width: 100%; text-align: left; background: none; border: none;
   padding: 0.7rem 0; color: var(--text);
 }
-.notif-row:last-child { border-bottom: none; }
+
+html.is-mobile-device .hide-title-mobile { display: none; }
+
+.popup-search-input { margin-top: 0.75rem; }
 .add-pin-tile {
   display: flex;
   align-items: center;
@@ -311,7 +335,8 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
    height and scrollable as a whole, instead of a full page/screen.
    ============================================================ */
 .pin-detail-modal {
-  max-height: 70vh;
+  height: 50vh;
+  max-height: 50vh;
   padding: 0;
   overflow-y: auto;
 }
@@ -352,7 +377,7 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   touch-action: pan-y;
   user-select: none;
 }
-.cal-hour-row { display: flex; border-bottom: 1px solid var(--border); min-height: 48px; }
+.cal-hour-row { display: flex; border-bottom: 1px solid var(--border); min-height: var(--hour-row-height, 48px); }
 .cal-hour-label { width: 56px; flex-shrink: 0; font-size: 0.7rem; color: var(--text-muted); padding: 4px 6px 0 0; text-align: right; }
 .cal-hour-slot { flex: 1; position: relative; padding: 3px 6px; display: flex; flex-direction: column; gap: 2px; }
 
@@ -432,15 +457,23 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   background: var(--surface);
 }
 .post-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.post-header-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
 .post-header-end { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+.post-header-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+/* The handle graphic is small, but inside a popup the whole column is the
+   drag/tap target — much easier to grab than the tiny pill alone. Scoped
+   to popup contexts only, so it doesn't eat scroll gestures on the plain
+   inline post header (Discover feed). */
+.pin-detail-modal .post-header-center {
+  padding: 0.6rem 1.25rem;
+  margin: -0.6rem 0;
+  touch-action: none;
+  cursor: grab;
+}
 .post-drag-handle {
   display: none;
   width: 36px; height: 5px;
   border-radius: 999px;
   background: var(--border);
-  cursor: grab;
-  touch-action: none;
 }
 html.is-mobile-device .pin-detail-modal .post-drag-handle { display: block; }
 html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
@@ -456,13 +489,12 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-carousel img { flex: 0 0 100%; scroll-snap-align: start; width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
 .post-carousel .feed-post-photo-placeholder { flex: 0 0 100%; scroll-snap-align: start; }
 .feed-post-photo-placeholder { aspect-ratio: 4/5; }
-.post-photo-counter { text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 0.3rem 0 0; }
 .post-actions { display: flex; align-items: center; gap: 1.1rem; padding: 0.5rem 0.85rem; }
 .post-actions .icon-btn { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; }
 .icon-btn svg { width: 23px; height: 23px; display: block; }
 .post-count { font-size: 0.85rem; color: var(--text); }
 .post-map-btn { margin-left: auto; }
-.post-body { padding: 0.3rem 0.85rem 0.85rem 0; }
+.post-body { padding: 0.3rem 0.85rem 0.85rem; }
 .post-caption { margin: 0; white-space: pre-wrap; }
 .post-owner-avatar-btn { display: inline-flex; vertical-align: middle; padding: 0; border: none; background: none; cursor: pointer; margin-right: 0.35rem; }
 .post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
@@ -483,11 +515,12 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .comment-body { margin: 0.2rem 0 0; }
 .comments-modal .post-comment-form { padding: 0.7rem 0.85rem; border-top: 1px solid var(--border); margin: 0; }
 
-/* Bottom-sheet grow/shrink via the drag handle — see js/postCard.js */
-html.is-mobile-device .pin-detail-modal { transition: max-height 0.2s ease, height 0.2s ease, border-radius 0.2s ease; }
-html.is-mobile-device .pin-detail-modal.sheet-full {
+/* Bottom-sheet grow/shrink via the drag handle — see js/sheetDrag.js */
+.pin-detail-modal { transition: max-height 0.2s ease, height 0.2s ease, border-radius 0.2s ease; }
+.pin-detail-modal.sheet-full {
   height: 100vh; max-height: 100vh; border-radius: 0;
 }
+html.is-desktop-device .pin-detail-modal.sheet-full { border-radius: var(--radius); }
 
 /* ============================================================
    Photo crop tool (js/imageCrop.js)

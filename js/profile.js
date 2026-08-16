@@ -2,6 +2,7 @@ import { requireSession, signOut } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { openPinDetail, openPinDetailFullscreen } from "./pinDetailModal.js";
+import { setupSheetDrag } from "./sheetDrag.js";
 
 const NOTIF_SEEN_KEY = "hg:notifSeenAt";
 const PERSON_PLACEHOLDER = `
@@ -174,12 +175,12 @@ if (session) {
     backdrop.innerHTML = `
       <div class="modal pin-detail-modal friends-modal stack">
         <div class="post-header">
-          <strong class="post-title">Friends</strong>
+          <strong class="post-title hide-title-mobile">Friends</strong>
           <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
           <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
         </div>
         <div class="friends-body stack">
-          <input id="friendFilterInput" placeholder="Search your friends" />
+          <input id="friendFilterInput" class="popup-search-input" placeholder="Search your friends" />
           <div id="currentFriendsList" class="stack"><p class="muted">Loading…</p></div>
         </div>
       </div>
@@ -191,7 +192,7 @@ if (session) {
       if (e.target === backdrop) close();
     });
     modalEl.querySelector(".post-close-btn").addEventListener("click", close);
-    setupSheetDrag(modalEl, close);
+    setupSheetDrag(modalEl, { onDismiss: close });
 
     const { data: accepted } = await supabase
       .from("friend_requests")
@@ -430,7 +431,7 @@ if (session) {
     backdrop.innerHTML = `
       <div class="modal pin-detail-modal notif-modal stack">
         <div class="post-header">
-          <strong class="post-title">Notifications</strong>
+          <strong class="post-title hide-title-mobile">Notifications</strong>
           <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
           <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
         </div>
@@ -458,47 +459,12 @@ if (session) {
       if (e.target === backdrop) close();
     });
     modalEl.querySelector(".post-close-btn").addEventListener("click", close);
-    setupSheetDrag(modalEl, close);
+    setupSheetDrag(modalEl, { onDismiss: close });
     modalEl.querySelectorAll(".notif-row").forEach((row) => {
       row.addEventListener("click", () => {
         if (row.dataset.href) window.location.href = row.dataset.href;
       });
     });
-  }
-
-  // Shared drag-handle-to-resize/dismiss behavior for the half-screen
-  // popups built directly in this file (mirrors js/postCard.js).
-  function setupSheetDrag(modalEl, close) {
-    const dragHandle = modalEl.querySelector(".post-drag-handle");
-    if (!dragHandle) return;
-    let dragging = false;
-    let startY = 0;
-    let startedFull = false;
-    dragHandle.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      startY = e.clientY;
-      startedFull = modalEl.classList.contains("sheet-full");
-      modalEl.style.transition = "none";
-      dragHandle.setPointerCapture(e.pointerId);
-    });
-    dragHandle.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      const dy = e.clientY - startY;
-      modalEl.style.transform = `translateY(${startedFull ? Math.max(dy, 0) : dy}px)`;
-    });
-    const end = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      modalEl.style.transition = "";
-      modalEl.style.transform = "";
-      const dy = e.clientY - startY;
-      if (!startedFull && dy < -60) modalEl.classList.add("sheet-full");
-      else if (!startedFull && dy > 100) close();
-      else if (startedFull && dy > 250) close();
-      else if (startedFull && dy > 100) modalEl.classList.remove("sheet-full");
-    };
-    dragHandle.addEventListener("pointerup", end);
-    dragHandle.addEventListener("pointercancel", end);
   }
 
   function openEditProfileModal() {

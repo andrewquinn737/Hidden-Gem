@@ -1,6 +1,7 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinDetail } from "./pinDetailModal.js";
+import { setupSheetDrag } from "./sheetDrag.js";
 
 const session = await requireSession();
 if (session) {
@@ -201,14 +202,43 @@ if (session) {
   }
 
   // Swipe left/right to change day, long-press an empty slot to start a
-  // new draft event there. Pointer Events unify mouse + touch.
+  // new draft event there, pinch with two fingers to zoom the hour rows
+  // taller/shorter. Pointer Events unify mouse + touch.
   function setupDayGestures() {
     const grid = document.getElementById("dayView");
     let pointerStart = null;
     let longPressTimer = null;
     let longPressFired = false;
 
+    const activePointers = new Map(); // pointerId -> {x, y}
+    let pinchStartDist = null;
+    let pinchStartRowHeight = null;
+    const MIN_ROW = 30;
+    const MAX_ROW = 140;
+
+    function currentRowHeight() {
+      const val = parseFloat(getComputedStyle(grid).getPropertyValue("--hour-row-height"));
+      return val || 48;
+    }
+    function pointerDistance() {
+      const pts = Array.from(activePointers.values());
+      if (pts.length < 2) return null;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    }
+
     grid.addEventListener("pointerdown", (e) => {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2) {
+        // A second finger landed — abandon any single-finger gesture in
+        // progress and start tracking the pinch instead.
+        clearTimeout(longPressTimer);
+        pointerStart = null;
+        pinchStartDist = pointerDistance();
+        pinchStartRowHeight = currentRowHeight();
+        return;
+      }
+      if (activePointers.size > 1) return;
+
       if (e.target.closest(".calendar-event")) return;
       const slot = e.target.closest(".cal-hour-slot");
       pointerStart = { x: e.clientX, y: e.clientY, time: Date.now(), hour: slot ? Number(slot.dataset.hour) : null };
@@ -224,13 +254,29 @@ if (session) {
     });
 
     grid.addEventListener("pointermove", (e) => {
+      if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size === 2 && pinchStartDist) {
+        const dist = pointerDistance();
+        if (!dist) return;
+        const scale = dist / pinchStartDist;
+        const newHeight = Math.min(MAX_ROW, Math.max(MIN_ROW, pinchStartRowHeight * scale));
+        grid.style.setProperty("--hour-row-height", `${newHeight}px`);
+        return;
+      }
+
       if (!pointerStart) return;
       const dx = Math.abs(e.clientX - pointerStart.x);
       const dy = Math.abs(e.clientY - pointerStart.y);
       if (dx > 10 || dy > 10) clearTimeout(longPressTimer);
     });
 
-    grid.addEventListener("pointerup", (e) => {
+    const releasePointer = (e) => {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) {
+        pinchStartDist = null;
+        pinchStartRowHeight = null;
+      }
       clearTimeout(longPressTimer);
       if (longPressFired || !pointerStart) {
         pointerStart = null;
@@ -242,9 +288,15 @@ if (session) {
         changeDay(dx > 0 ? -1 : 1);
       }
       pointerStart = null;
-    });
+    };
 
-    grid.addEventListener("pointercancel", () => {
+    grid.addEventListener("pointerup", releasePointer);
+    grid.addEventListener("pointercancel", (e) => {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) {
+        pinchStartDist = null;
+        pinchStartRowHeight = null;
+      }
       clearTimeout(longPressTimer);
       pointerStart = null;
     });
@@ -446,14 +498,14 @@ if (session) {
                 </div>`
               : `<div><label class="field-label">Pin</label><input value="${escapeAttr(draftEvent.pinTitle)}" disabled /></div>`
           }
-          <div class="row">
-            <div style="flex:1;">
+          <div class="row" style="justify-content:flex-start;">
+            <div style="flex:0 0 auto; width:min-content;">
               <label class="field-label" for="draftDate">Date</label>
-              <input id="draftDate" type="date" value="${toDateInputValue(currentDate)}" required />
+              <input id="draftDate" type="date" value="${toDateInputValue(currentDate)}" required style="width:auto;" />
             </div>
-            <div style="flex:1;">
+            <div style="flex:0 0 auto; width:min-content;">
               <label class="field-label" for="draftTime">Time</label>
-              <input id="draftTime" type="time" value="${toTimeInputValue(draftEvent.hour, draftEvent.minute)}" required />
+              <input id="draftTime" type="time" value="${toTimeInputValue(draftEvent.hour, draftEvent.minute)}" required style="width:auto;" />
             </div>
           </div>
           <div>
@@ -582,7 +634,7 @@ if (session) {
       if (e.target === backdrop) close();
     });
     modalEl.querySelector(".post-close-btn").addEventListener("click", close);
-    setupSheetDrag(modalEl, close);
+    setupSheetDrag(modalEl, { onDismiss: close });
     modalEl.querySelector("#visitPinNameBtn").addEventListener("click", () => {
       openPinDetail(visit.pin_id, {});
     });
@@ -615,40 +667,6 @@ if (session) {
       .not("user_id", "is", null);
     const names = (participants || []).map((p) => p.profiles?.username).filter(Boolean);
     modalEl.querySelector("#visitSharedWith").textContent = names.length ? `Shared with: ${names.join(", ")}` : "";
-  }
-
-  // Shared drag-handle-to-resize/dismiss behavior (mirrors js/postCard.js).
-  function setupSheetDrag(modalEl, close) {
-    const dragHandle = modalEl.querySelector(".post-drag-handle");
-    if (!dragHandle) return;
-    let dragging = false;
-    let startY = 0;
-    let startedFull = false;
-    dragHandle.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      startY = e.clientY;
-      startedFull = modalEl.classList.contains("sheet-full");
-      modalEl.style.transition = "none";
-      dragHandle.setPointerCapture(e.pointerId);
-    });
-    dragHandle.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      const dy = e.clientY - startY;
-      modalEl.style.transform = `translateY(${startedFull ? Math.max(dy, 0) : dy}px)`;
-    });
-    const end = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      modalEl.style.transition = "";
-      modalEl.style.transform = "";
-      const dy = e.clientY - startY;
-      if (!startedFull && dy < -60) modalEl.classList.add("sheet-full");
-      else if (!startedFull && dy > 100) close();
-      else if (startedFull && dy > 250) close();
-      else if (startedFull && dy > 100) modalEl.classList.remove("sheet-full");
-    };
-    dragHandle.addEventListener("pointerup", end);
-    dragHandle.addEventListener("pointercancel", end);
   }
 
   // ============================================================
@@ -691,7 +709,7 @@ if (session) {
       if (e.target === backdrop) close();
     });
     modalEl.querySelector(".post-close-btn").addEventListener("click", close);
-    setupSheetDrag(modalEl, close);
+    setupSheetDrag(modalEl, { onDismiss: close });
 
     modalEl.querySelector("#shareJoinBtn").addEventListener("click", async () => {
       const errorEl = modalEl.querySelector("#shareJoinError");

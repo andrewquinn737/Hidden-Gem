@@ -1,8 +1,10 @@
 import { supabase } from "./supabaseClient.js";
 import { cropImageToAspect } from "./imageCrop.js";
+import { setupSheetDrag } from "./sheetDrag.js";
 
 const MAX_PHOTOS = 3;
 const CATEGORIES = ["Camping", "Hiking", "Urban Exploring", "Cliff Jumping", "Roof", "Beach"];
+const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 
 async function ensureLeaflet() {
   if (window.L) return;
@@ -30,9 +32,11 @@ function locationIcon() {
   return L.divIcon({ className: "custom-pin-icon", html: svg, iconSize: [28, 40], iconAnchor: [14, 40] });
 }
 
-// A small map + editable coordinate fields live inside the form, kept in
-// sync both ways: click the map to set the marker (fills the coordinate
-// inputs), or type coordinates directly (moves the marker).
+// Half-screen popup (drag handle, defaults to fullscreen since there's a
+// lot to fill in) — a small map + editable coordinate fields live inside
+// the form, kept in sync both ways: click the map to set the marker
+// (fills the coordinate inputs), or type coordinates directly (moves the
+// marker).
 export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   const isEdit = !!editingPin;
   let pinLat, pinLng;
@@ -67,13 +71,24 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.innerHTML = `
-    <div class="modal stack">
-      <h2 style="margin:0;">${isEdit ? "Edit pin" : "New pin"}</h2>
-      <form id="pinForm" class="stack">
+    <div class="modal pin-detail-modal pin-form-modal stack">
+      <div class="post-header">
+        <strong class="post-title">${isEdit ? "Edit pin" : "New pin"}</strong>
+        <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
+        <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
+      </div>
+      <form id="pinForm" class="pin-form-body stack">
         <div>
           <label class="field-label" for="pinTitle">Name</label>
           <input id="pinTitle" required maxlength="120" value="${attr(editingPin?.title)}" />
         </div>
+
+        <div>
+          <label class="field-label">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
+          <div id="pinPhotoPreviews" class="photo-grid"></div>
+          <input id="pinPhotosInput" type="file" accept="image/*" multiple style="display:none;" />
+        </div>
+
         <div>
           <label class="field-label" for="pinDescription">Description</label>
           <textarea id="pinDescription" rows="2">${escapeHtml(editingPin?.description)}</textarea>
@@ -99,15 +114,6 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
           </div>
         </div>
 
-        <div>
-          <label class="field-label">Photos (up to ${MAX_PHOTOS} — first one is the cover photo)</label>
-          <div id="pinPhotoPreviews" class="photo-grid" style="margin-bottom:0.5rem;"></div>
-          <label class="btn" style="display:block; text-align:center;">
-            Choose photos
-            <input id="pinPhotosInput" type="file" accept="image/*" multiple style="display:none;" />
-          </label>
-        </div>
-
         <label class="row">
           <input type="checkbox" id="pinPrivate" style="width:auto;" ${editingPin?.visibility === "private" ? "checked" : ""} />
           <span>Make this pin private</span>
@@ -115,21 +121,23 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
 
         <p class="error-text" id="pinFormError" style="display:none;"></p>
         <p class="muted" id="pinFormShareLink" style="display:none; word-break:break-all;"></p>
-
-        <div class="row">
-          <button type="button" id="pinCancelBtn" class="btn" style="flex:1;">Cancel</button>
-          <button type="submit" class="btn btn-primary" style="flex:1;">${isEdit ? "Save changes" : "Save pin"}</button>
-        </div>
       </form>
+      <div class="row pin-form-footer">
+        <button type="button" id="pinCancelBtn" class="btn" style="flex:1;">Cancel</button>
+        <button type="submit" form="pinForm" class="btn btn-primary" style="flex:1;">${isEdit ? "Save changes" : "Save pin"}</button>
+      </div>
     </div>
   `;
   document.body.appendChild(backdrop);
+  const modalEl = backdrop.querySelector(".pin-form-modal");
 
   const close = () => backdrop.remove();
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) close();
   });
+  modalEl.querySelector(".post-close-btn").addEventListener("click", close);
   backdrop.querySelector("#pinCancelBtn").addEventListener("click", close);
+  setupSheetDrag(modalEl, { onDismiss: close, startFull: true });
 
   // Embedded location picker — click the map or type coordinates, either
   // one updates the other.
@@ -164,7 +172,9 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
 
   // Photo selection with removable previews, capped at MAX_PHOTOS total.
   // Every newly-added photo is cropped to a fixed aspect ratio first so all
-  // posts share the same framing.
+  // posts share the same framing. The add tile itself is just the next
+  // empty slot in the grid — it advances forward as photos are added and
+  // disappears once the cap is reached.
   let photoFiles = [];
   const photosInput = backdrop.querySelector("#pinPhotosInput");
   const previewsEl = backdrop.querySelector("#pinPhotoPreviews");
@@ -231,7 +241,15 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       previewsEl.appendChild(wrap);
     });
 
-    if (previewsEl.firstElementChild) {
+    if (slotsUsed() < MAX_PHOTOS) {
+      const addTile = document.createElement("label");
+      addTile.className = "photo-add-tile";
+      addTile.setAttribute("for", "pinPhotosInput");
+      addTile.innerHTML = PLUS_ICON;
+      previewsEl.appendChild(addTile);
+    }
+
+    if (previewsEl.firstElementChild && previewsEl.firstElementChild.tagName === "DIV") {
       const coverBadge = document.createElement("span");
       coverBadge.textContent = "cover";
       coverBadge.className = "pill";
@@ -251,7 +269,7 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
     const errorEl = backdrop.querySelector("#pinFormError");
     const shareEl = backdrop.querySelector("#pinFormShareLink");
     errorEl.style.display = "none";
-    const submitBtn = e.target.querySelector("button[type=submit]");
+    const submitBtn = modalEl.querySelector(".pin-form-footer button[type=submit]");
     submitBtn.disabled = true;
 
     try {
