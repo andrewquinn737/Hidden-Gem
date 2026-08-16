@@ -57,6 +57,13 @@ if (session) {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", viewingUserId).single();
     profileCache = profile;
     document.getElementById("profileUsername").textContent = profile?.username || "—";
+    const bioLine = document.getElementById("profileBioLine");
+    if (profile?.bio) {
+      bioLine.textContent = profile.bio;
+      bioLine.style.display = "block";
+    } else {
+      bioLine.style.display = "none";
+    }
     if (profile?.avatar_url) {
       const { data } = await supabase.storage.from("media").createSignedUrl(profile.avatar_url, 3600);
       if (data?.signedUrl) {
@@ -69,10 +76,6 @@ if (session) {
   }
 
   async function loadCounts() {
-    const { count: pinCount } = await supabase
-      .from("pins")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", viewingUserId);
     const { count: followerCount } = await supabase
       .from("friend_requests")
       .select("*", { count: "exact", head: true })
@@ -83,10 +86,10 @@ if (session) {
       .select("*", { count: "exact", head: true })
       .eq("status", "accepted")
       .eq("requester_id", viewingUserId);
-    document.getElementById("statPins").textContent = pinCount ?? 0;
-    document.getElementById("statPinsLabel").textContent = pinCount === 1 ? "pin" : "pins";
     document.getElementById("statFollowers").textContent = followerCount ?? 0;
     document.getElementById("statFollowing").textContent = followingCount ?? 0;
+    document.getElementById("statFollowersLabel").textContent = followerCount === 1 ? "follower" : "followers";
+    document.getElementById("statFollowingLabel").textContent = followingCount === 1 ? "following" : "following";
   }
 
   // Incoming follow requests — only the recipient can accept/decline
@@ -517,9 +520,9 @@ if (session) {
             </label>
           </div>
           <form id="editProfileForm" class="stack">
-            <input id="editUsername" placeholder="Username" required maxlength="30" value="${profileCache?.username ?? ""}" />
-            <input id="editFullName" placeholder="Full name" maxlength="120" value="${profileCache?.full_name ?? ""}" />
-            <textarea id="editBio" placeholder="Bio" rows="3" maxlength="280">${profileCache?.bio ?? ""}</textarea>
+            <input id="editUsername" placeholder="Username" required maxlength="15" value="${profileCache?.username ?? ""}" />
+            <input id="editFullName" placeholder="Full name" maxlength="15" value="${profileCache?.full_name ?? ""}" />
+            <textarea id="editBio" placeholder="Bio" rows="3" maxlength="30">${profileCache?.bio ?? ""}</textarea>
             <p class="error-text" id="editProfileError" style="display:none;"></p>
             <div class="row">
               <button type="button" id="editCancelBtn" class="btn" style="flex:1;">Cancel</button>

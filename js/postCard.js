@@ -163,7 +163,6 @@ export async function renderPostCard(pin, container, options = {}) {
   card.querySelector(".post-title").addEventListener("click", () => {
     window.location.href = `profile.html?id=${pin.owner_id}&openPinId=${pin.id}`;
   });
-  fitTitleText(card.querySelector(".post-title"));
   if (Number.isFinite(pin.lat) && Number.isFinite(pin.lng)) {
     reverseGeocodeLabel(pin.lat, pin.lng).then((label) => {
       const el = card.querySelector(".post-location-label");
@@ -432,19 +431,6 @@ async function openCommentsPopup(pin, currentUserId, onCountChange) {
   });
 
   await loadComments();
-}
-
-// Shrinks the title's font-size instead of ellipsis-truncating it, but
-// only once it's genuinely about to crowd its column (the category pill
-// lives in the header's other outer column) — most titles never trigger
-// this since pin names are capped at 25 characters.
-function fitTitleText(el) {
-  el.style.fontSize = "";
-  let size = 1;
-  while (el.scrollWidth > el.clientWidth + 1 && size > 0.7) {
-    size -= 0.05;
-    el.style.fontSize = `${size}em`;
-  }
 }
 
 function escapeHtml(str) {

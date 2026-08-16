@@ -525,7 +525,8 @@ if (session) {
             refreshConnectedState();
           }
         : async () => {
-            await supabase.auth.linkIdentity({
+            dropdown.style.display = "none";
+            const { error } = await supabase.auth.linkIdentity({
               provider: "google",
               options: {
                 redirectTo: `${window.location.origin}/scheduler.html`,
@@ -533,6 +534,16 @@ if (session) {
                 queryParams: { access_type: "offline", prompt: "consent" },
               },
             });
+            // linkIdentity() only navigates to Google on success — on
+            // error (most commonly Supabase's "Allow manual linking"
+            // setting being off, which blocks this API by default) it just
+            // resolves with an error and does nothing, which is why this
+            // looked like a dead button. Surface it instead of failing silently.
+            if (error) {
+              alert(
+                `Couldn't start Google Calendar connect: ${error.message}\n\nIf this says linking is disabled, enable "Allow manual linking" under Authentication → Settings in the Supabase dashboard.`
+              );
+            }
           };
     }
     await refreshConnectedState();

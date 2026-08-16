@@ -7,9 +7,9 @@ import { MAP_OUTLINE_SVG } from "./placeholders.js";
 import { STYLES, CATEGORIES, pinCanvas, retintParchment } from "./mapStyles.js";
 
 const PIN_COLORS = {
-  mine: "#b5651d", // accent
-  friend: "#2f6fed", // blue
-  other: "#2e8b57", // green
+  mine: "#2f6fed", // blue
+  friend: "#2e8b57", // green — pins from people you follow
+  other: "#b5651d", // brown/accent — everyone else's public pins
 };
 
 const session = await requireSession();
@@ -23,14 +23,12 @@ if (session) {
   const VIEW_KEY = "hg:mapView";
   let initialCenter = [0, 20];
   let initialZoom = 2;
-  let restoredView = false;
   if (!focusPinId && !repositionPinId) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "null");
       if (saved) {
         initialCenter = [saved.lng, saved.lat];
         initialZoom = saved.zoom;
-        restoredView = true;
       }
     } catch {
       // ignore malformed saved state
@@ -194,6 +192,11 @@ if (session) {
           "circle-radius": 18,
           "circle-stroke-width": 2,
           "circle-stroke-color": "#fff",
+          // Instant, not the ~300ms default fade — clusters/pins should
+          // appear and disappear the moment zoom crosses their threshold,
+          // not lag a beat behind it.
+          "circle-opacity-transition": { duration: 0 },
+          "circle-stroke-opacity-transition": { duration: 0 },
         },
       });
       map.addLayer({
@@ -202,7 +205,7 @@ if (session) {
         source: "pins",
         filter: ["has", "point_count"],
         layout: { "text-field": "{point_count_abbreviated}", "text-size": 13, "text-font": ["Noto Sans Bold"] },
-        paint: { "text-color": "#fff" },
+        paint: { "text-color": "#fff", "text-opacity-transition": { duration: 0 } },
       });
       map.addLayer({
         id: "unclustered-point",
@@ -215,24 +218,9 @@ if (session) {
           "icon-anchor": "bottom",
           "icon-allow-overlap": true,
         },
+        paint: { "icon-opacity-transition": { duration: 0 } },
       });
 
-      map.on("click", "clusters", (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
-        if (!features.length) return;
-        const clusterId = features[0].properties.cluster_id;
-        const coords = features[0].geometry.coordinates;
-        map.getSource("pins").getClusterExpansionZoom(clusterId, (err, zoom) => {
-          // Fall back to a fixed zoom-in step if the exact expansion zoom
-          // can't be computed, so a click always visibly does something —
-          // worst case it takes one extra click to fully split a cluster.
-          map.easeTo({ center: coords, zoom: err ? map.getZoom() + 2.5 : zoom });
-        });
-      });
-      map.on("click", "unclustered-point", (e) => {
-        const f = e.features[0];
-        openPinPopup(f.properties.id, f.geometry.coordinates.slice());
-      });
       map.on("mouseenter", "clusters", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "clusters", () => (map.getCanvas().style.cursor = ""));
       map.on("mouseenter", "unclustered-point", () => (map.getCanvas().style.cursor = "pointer"));
@@ -258,6 +246,30 @@ if (session) {
   }
   map.on("styledata", () => trySetupPinLayers());
   trySetupPinLayers();
+
+  // Bound once, unconditionally — not nested inside setupPinLayers' "only
+  // the first successful run" guard, so it can never end up unregistered
+  // if that guard's timing ever changes. queryRenderedFeatures against
+  // layers that don't exist yet just returns empty, so this is safe to
+  // bind before the pin layers have actually been added.
+  map.on("click", (e) => {
+    const [feature] = map.queryRenderedFeatures(e.point, { layers: ["clusters", "unclustered-point"] });
+    if (!feature) return;
+    if (feature.layer.id === "clusters") {
+      const clusterId = feature.properties.cluster_id;
+      const coords = feature.geometry.coordinates.slice();
+      const source = map.getSource("pins");
+      if (!source) return;
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        // Fall back to a fixed zoom-in step if the exact expansion zoom
+        // can't be computed, so a click always visibly does something —
+        // worst case it takes one extra click to fully split a cluster.
+        map.easeTo({ center: coords, zoom: err ? map.getZoom() + 2.5 : zoom });
+      });
+    } else {
+      openPinPopup(feature.properties.id, feature.geometry.coordinates.slice());
+    }
+  });
 
   await loadPins();
 
@@ -331,19 +343,13 @@ if (session) {
   document.getElementById("geolocateBtn").addEventListener("click", () => {
     geolocateControl.trigger();
   });
-  // If location permission is already granted (a returning user), show the
-  // blue dot right away instead of waiting for a manual tap on the 📍
-  // button — matching Google/Apple Maps. First-time visitors still only
-  // get the permission prompt when they actually ask for it.
-  if (!focusPinId && !repositionPinId && !restoredView) {
-    if (navigator.permissions?.query) {
-      navigator.permissions
-        .query({ name: "geolocation" })
-        .then((status) => {
-          if (status.state === "granted") geolocateControl.trigger();
-        })
-        .catch(() => {});
-    }
+  // Blue dot shows up right away on a normal map visit, without waiting for
+  // a manual tap on the 📍 button — matching Google/Apple Maps (this also
+  // triggers the permission prompt itself on a first-time visitor, same as
+  // tapping the button would). Skipped when landing on a specific pin or in
+  // reposition mode, so it doesn't fight that deliberate camera target.
+  if (!focusPinId && !repositionPinId) {
+    geolocateControl.trigger();
   }
 
   // Map options menu — Map (style), Accounts, Tag, each an accordion
@@ -367,24 +373,36 @@ if (session) {
     });
   });
 
+  function markSelectedStyle() {
+    document.querySelectorAll("[data-map-style]").forEach((btn) => {
+      btn.classList.toggle("selected", btn.dataset.mapStyle === currentStyleKey);
+    });
+  }
+  markSelectedStyle();
   document.querySelectorAll("[data-map-style]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      menuDropdown.style.display = "none";
       const key = btn.dataset.mapStyle;
-      if (key === currentStyleKey) return;
-      currentStyleKey = key;
-      localStorage.setItem(STYLE_KEY, key);
-      map.setStyle(STYLES[key]);
+      if (key !== currentStyleKey) {
+        currentStyleKey = key;
+        localStorage.setItem(STYLE_KEY, key);
+        map.setStyle(STYLES[key]);
+        markSelectedStyle();
+      }
+      menuDropdown.style.display = "none";
     });
   });
 
-  // Accounts filter
-  document.querySelectorAll("[data-account-filter]").forEach((checkbox) => {
-    checkbox.checked = filterState.accounts.has(checkbox.dataset.accountFilter);
-    checkbox.addEventListener("change", () => {
-      const key = checkbox.dataset.accountFilter;
-      if (checkbox.checked) filterState.accounts.add(key);
+  // Accounts filter — buttons that toggle a "selected" state (checkmark),
+  // not native checkboxes, so they can share the same icon+label layout
+  // as the Map submenu.
+  document.querySelectorAll("[data-account-filter]").forEach((btn) => {
+    btn.classList.toggle("selected", filterState.accounts.has(btn.dataset.accountFilter));
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.accountFilter;
+      const nowSelected = !filterState.accounts.has(key);
+      if (nowSelected) filterState.accounts.add(key);
       else filterState.accounts.delete(key);
+      btn.classList.toggle("selected", nowSelected);
       saveFilterState();
       applyFilters();
     });
@@ -395,13 +413,15 @@ if (session) {
   const tagSub = document.getElementById("tagSub");
   if (tagSub) {
     tagSub.innerHTML = CATEGORIES.map(
-      (tag) => `<label class="map-filter-check-row"><input type="checkbox" data-tag-filter="${tag}" ${filterState.tags.has(tag) ? "checked" : ""} /> ${tag}</label>`
+      (tag) => `<button class="btn dropdown-item map-filter-option ${filterState.tags.has(tag) ? "selected" : ""}" data-tag-filter="${tag}" style="width:100%; text-align:left;"><span class="map-filter-check">✓</span><span>${tag}</span></button>`
     ).join("");
-    tagSub.querySelectorAll("[data-tag-filter]").forEach((checkbox) => {
-      checkbox.addEventListener("change", () => {
-        const key = checkbox.dataset.tagFilter;
-        if (checkbox.checked) filterState.tags.add(key);
+    tagSub.querySelectorAll("[data-tag-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.tagFilter;
+        const nowSelected = !filterState.tags.has(key);
+        if (nowSelected) filterState.tags.add(key);
         else filterState.tags.delete(key);
+        btn.classList.toggle("selected", nowSelected);
         saveFilterState();
         applyFilters();
       });

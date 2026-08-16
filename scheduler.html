@@ -22,7 +22,7 @@
 <body data-page="scheduler.html">
 <div id="topnav"></div>
 <main>
-  <div class="row-between">
+  <div class="row-between" style="align-items:center;">
     <div style="position:relative;">
       <button id="viewModeBtn" class="btn">Day ▾</button>
       <div id="viewModeDropdown" class="card dropdown-menu stack" style="display:none; position:absolute; left:0; top:110%; z-index:20; min-width:130px; padding:0.4rem; gap:0.25rem;">
@@ -40,16 +40,14 @@
         </button>
       </div>
     </div>
-    <div class="row" style="gap:0.4rem;">
-      <button id="upcomingBtn" class="btn">Upcoming events</button>
-      <div style="position:relative;">
-        <button id="schedMenuBtn" class="btn" aria-label="Calendar">Calendar</button>
-        <div id="schedMenuDropdown" class="card dropdown-menu stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:220px; padding:0.4rem; gap:0.25rem;">
-          <button id="connectGoogleBtn" class="btn dropdown-item" style="width:100%; text-align:left;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span id="connectGoogleLabel">Connect Google Calendar</span>
-          </button>
-        </div>
+    <button id="upcomingBtn" class="btn">Upcoming events</button>
+    <div style="position:relative;">
+      <button id="schedMenuBtn" class="btn" aria-label="Calendar">Calendar</button>
+      <div id="schedMenuDropdown" class="card dropdown-menu stack" style="display:none; position:absolute; right:0; top:110%; z-index:20; min-width:220px; padding:0.4rem; gap:0.25rem;">
+        <button id="connectGoogleBtn" class="btn dropdown-item" style="width:100%; text-align:left;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="connectGoogleLabel">Connect Google Calendar</span>
+        </button>
       </div>
     </div>
   </div>

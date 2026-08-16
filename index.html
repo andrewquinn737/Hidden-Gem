@@ -20,6 +20,12 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="theme-color" content="#b5651d" />
 <style>
+  /* The map page is a fixed fullscreen canvas, not a scrollable document —
+     pinning body to the viewport (instead of letting it flow normally)
+     stops iOS Safari's momentum-scroll/URL-bar rubber-banding from
+     dragging the toolbar and tab bar out of place, which showed up as
+     white gaps flashing in at the top/bottom while scrolling. */
+  body[data-page="index.html"] { position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; }
   main.map-main { max-width: none; padding: 0; position: relative; }
   .map-toolbar {
     position: absolute;
@@ -47,9 +53,6 @@
     box-shadow: none !important;
   }
   .maplibregl-ctrl-group button + button { border-top: none !important; }
-  .map-filter-submenu { display: none; padding-left: 1.6rem; }
-  .map-filter-submenu.open { display: flex; }
-  .map-filter-check-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
   /* Align the zoom control with the floating mobile tab bar: same right
      inset, sitting just above its top edge instead of underneath/behind
      it. 4.25rem ≈ the tab bar's own height (~3.75rem) plus a small gap. */
@@ -82,15 +85,18 @@
           <span>Map</span>
         </button>
         <div id="mapStyleSub" class="map-filter-submenu stack">
-          <button class="btn dropdown-item" data-map-style="street" style="width:100%; text-align:left;">
+          <button class="btn dropdown-item map-filter-option" data-map-style="street" style="width:100%; text-align:left;">
+            <span class="map-filter-check">✓</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h4l1-14h6l1 14h4"/><path d="M2 19h20"/></svg>
             <span>Street</span>
           </button>
-          <button class="btn dropdown-item" data-map-style="satellite" style="width:100%; text-align:left;">
+          <button class="btn dropdown-item map-filter-option" data-map-style="satellite" style="width:100%; text-align:left;">
+            <span class="map-filter-check">✓</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20"/></svg>
             <span>Satellite</span>
           </button>
-          <button class="btn dropdown-item" data-map-style="parchment" style="width:100%; text-align:left;">
+          <button class="btn dropdown-item map-filter-option" data-map-style="parchment" style="width:100%; text-align:left;">
+            <span class="map-filter-check">✓</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             <span>Parchment</span>
           </button>
@@ -100,9 +106,21 @@
           <span>Accounts</span>
         </button>
         <div id="accountsSub" class="map-filter-submenu stack">
-          <label class="map-filter-check-row"><input type="checkbox" data-account-filter="public" checked /> Public</label>
-          <label class="map-filter-check-row"><input type="checkbox" data-account-filter="following" checked /> Following</label>
-          <label class="map-filter-check-row"><input type="checkbox" data-account-filter="mine" checked /> Yours</label>
+          <button class="btn dropdown-item map-filter-option selected" data-account-filter="mine" style="width:100%; text-align:left;">
+            <span class="map-filter-check">✓</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="#2f6fed"><path d="M12 2a6 6 0 0 0-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 0 0-6-6z"/></svg>
+            <span>Yours</span>
+          </button>
+          <button class="btn dropdown-item map-filter-option selected" data-account-filter="following" style="width:100%; text-align:left;">
+            <span class="map-filter-check">✓</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="#2e8b57"><path d="M12 2a6 6 0 0 0-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 0 0-6-6z"/></svg>
+            <span>Following</span>
+          </button>
+          <button class="btn dropdown-item map-filter-option selected" data-account-filter="public" style="width:100%; text-align:left;">
+            <span class="map-filter-check">✓</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="#b5651d"><path d="M12 2a6 6 0 0 0-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 0 0-6-6z"/></svg>
+            <span>Public</span>
+          </button>
         </div>
         <button class="btn dropdown-item map-filter-toggle" data-submenu="tagSub" style="width:100%; text-align:left;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12.01V2h10.01l8.58 8.58a2 2 0 0 1 0 2.83z"/><circle cx="7" cy="7" r="1.5"/></svg>

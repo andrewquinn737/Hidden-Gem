@@ -15,6 +15,7 @@
   --tabbar-active-bg: rgba(34, 26, 16, 0.08);
   --menu-bg: rgba(255, 255, 255, 0.85);
   --map-toolbar-bg: rgba(255, 255, 255, 0.92);
+  --text-muted-strong: #4a4438;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,6 +35,7 @@
     --tabbar-active-bg: rgba(255, 255, 255, 0.16);
     --menu-bg: rgba(31, 26, 18, 0.85);
     --map-toolbar-bg: rgba(31, 26, 18, 0.92);
+    --text-muted-strong: #cfc6b4;
   }
 }
 
@@ -195,6 +197,20 @@ main {
 }
 .dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
 
+/* Map's Map/Accounts/Tag filter menu — accordion submenus nested under
+   their toggle row, no extra left indent (the checkmark column takes the
+   same horizontal slot the parent row's own icon sits in). */
+.map-filter-submenu { display: none; flex-direction: column; }
+.map-filter-submenu.open { display: flex; }
+.map-filter-option { gap: 0.5rem; }
+.map-filter-check {
+  width: 14px; flex-shrink: 0; text-align: center;
+  color: #2f6fed; font-weight: 700; font-size: 0.8rem;
+  visibility: hidden;
+}
+.map-filter-option.selected .map-filter-check { visibility: visible; }
+.map-filter-option svg { flex-shrink: 0; opacity: 1; }
+
 .bottom-tabbar .tab {
   display: flex;
   flex-direction: column;
@@ -219,7 +235,7 @@ main {
 
 .fab-add-pin {
   position: fixed;
-  left: 1.25rem;
+  right: 1.25rem;
   bottom: 1.25rem;
   width: 56px;
   height: 56px;
@@ -380,6 +396,7 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 .profile-toggle-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
 .profile-toggle-btn:first-child { border-right: 1px solid var(--border); }
 .profile-toggle-btn.active:first-child { border-right-color: var(--accent); }
+.profile-bio-line { display: block; font-size: 0.85rem; color: var(--text-muted-strong); margin: 0.1rem 0; }
 
 /* ============================================================
    Friends / Notifications half-screen popups
@@ -593,13 +610,24 @@ html.is-mobile-device .hide-title-mobile { visibility: hidden; }
 /* No drag handle to show on desktop (it closes via the ✕ instead), so
    collapse that row instead of leaving a gap of dead space above the title. */
 html.is-desktop-device .post-header-stacked .post-header-center { display: none; }
-/* No ellipsis — js/postCard.js's fitTitleText() shrinks the font-size
-   instead when the title is about to crowd the category pill, so the
-   full title stays readable rather than getting cut off with "…". It's a
+/* Wraps to a 2nd line instead of shrinking or clipping when the title gets
+   close to the category pill — the small reserved padding-right is roughly
+   one letter-"W" wide, so the wrap happens just before the text would
+   actually touch the pill, not exactly at the pixel boundary. It's a
    .btn-link (tap it to jump to the poster's profile with this post open),
    so its color/font/size need re-asserting over that class's gray link
    styling. */
-.post-title { font: inherit; font-weight: 700; color: var(--text); overflow: hidden; white-space: nowrap; }
+.post-title {
+  font: inherit; font-weight: 700; color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  width: 100%;
+  padding-right: 0.6em;
+  text-align: left;
+}
 .post-header-end { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
 .post-header-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
 /* The handle graphic is small, but inside a popup the whole column is the
@@ -632,7 +660,7 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-carousel img { flex: 0 0 100%; scroll-snap-align: start; width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
 .post-carousel .feed-post-photo-placeholder { flex: 0 0 100%; scroll-snap-align: start; }
 .feed-post-photo-placeholder { aspect-ratio: 4/5; }
-.post-actions { display: flex; align-items: center; gap: 1.1rem; padding: 0.5rem 0.85rem; }
+.post-actions { display: flex; align-items: center; gap: 0.95rem; padding: 0.5rem 0.85rem; }
 .post-actions .icon-btn { background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; }
 .icon-btn svg { width: 23px; height: 23px; display: block; }
 .post-count { font-size: 0.85rem; color: var(--text); }
@@ -664,7 +692,11 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-owner-avatar-btn { display: inline-flex; vertical-align: middle; padding: 0; border: none; background: none; cursor: pointer; margin-right: 0.35rem; }
 .post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
 .post-owner-name { padding: 0; font-weight: 700; color: var(--text); vertical-align: middle; margin-right: 0.35rem; }
-.post-caption-text { vertical-align: middle; }
+/* Deliberately baseline (the default), not middle — middle-aligning this
+   span shifted the native line-clamp "…" ellipsis (before "see more")
+   noticeably above the text baseline on the clamped line. The avatar/name
+   before it still use middle to line up with this text on line 1. */
+.post-caption-text { vertical-align: baseline; }
 /* Stays inline (not display:block) — a block child inside a
    -webkit-line-clamp box corrupts its line counting, which silently
    broke both the 3-line truncation and the "see more" button. The line
