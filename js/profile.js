@@ -30,24 +30,25 @@ if (session) {
   if (isOwnProfile) {
     document.getElementById("ownMenuArea").style.display = "flex";
     document.getElementById("profileToggle").style.display = "flex";
-    document.getElementById("addPinBtn").addEventListener("click", () => {
-      document.getElementById("menuDropdown").style.display = "none";
+    const addPinFab = document.getElementById("addPinFab");
+    addPinFab.style.display = "flex";
+    addPinFab.addEventListener("click", () => {
       openPinForm({ onSaved: () => { loadPinsGrid(); loadCounts(); } });
     });
-    await loadFriendRequests();
+    await loadFollowRequests();
     setupMenu();
     setupShare();
     setupToggle();
     setupNotifications();
-    // Own profile never shows a friend action — hide it so it doesn't
+    // Own profile never shows a follow action — hide it so it doesn't
     // still count as a flex item in the header row (which would push
     // ownMenuArea to visually "center" instead of the true right edge).
     document.getElementById("friendActionArea").style.display = "none";
   } else {
-    await renderFriendAction();
+    await renderFollowAction();
   }
   await loadPinsGrid();
-  setupFriendsCountButton();
+  setupFollowCountButtons();
 
   const openPinId = params.get("openPinId");
   if (openPinId) openPinDetailFullscreen(openPinId, {});
@@ -72,18 +73,25 @@ if (session) {
       .from("pins")
       .select("*", { count: "exact", head: true })
       .eq("owner_id", viewingUserId);
-    const { count: friendCount } = await supabase
+    const { count: followerCount } = await supabase
       .from("friend_requests")
       .select("*", { count: "exact", head: true })
       .eq("status", "accepted")
-      .or(`requester_id.eq.${viewingUserId},recipient_id.eq.${viewingUserId}`);
+      .eq("recipient_id", viewingUserId);
+    const { count: followingCount } = await supabase
+      .from("friend_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "accepted")
+      .eq("requester_id", viewingUserId);
     document.getElementById("statPins").textContent = pinCount ?? 0;
-    document.getElementById("statFriends").textContent = friendCount ?? 0;
     document.getElementById("statPinsLabel").textContent = pinCount === 1 ? "pin" : "pins";
-    document.getElementById("statFriendsLabel").textContent = friendCount === 1 ? "friend" : "friends";
+    document.getElementById("statFollowers").textContent = followerCount ?? 0;
+    document.getElementById("statFollowing").textContent = followingCount ?? 0;
   }
 
-  async function loadFriendRequests() {
+  // Incoming follow requests — only the recipient can accept/decline
+  // (enforced by RLS too, see migration_followers.sql).
+  async function loadFollowRequests() {
     const el = document.getElementById("friendRequests");
     const { data: incoming } = await supabase
       .from("friend_requests")
@@ -96,7 +104,7 @@ if (session) {
       return;
     }
 
-    el.innerHTML = `<div class="card stack"><h2 style="margin:0;">Friend requests</h2><div id="friendRequestsList" class="stack"></div></div>`;
+    el.innerHTML = `<div class="card stack"><h2 style="margin:0;">Follow requests</h2><div id="friendRequestsList" class="stack"></div></div>`;
     const listEl = document.getElementById("friendRequestsList");
     for (const req of incoming) {
       const row = document.createElement("div");
@@ -110,81 +118,79 @@ if (session) {
       `;
       row.querySelector(".accept-btn").addEventListener("click", async () => {
         await supabase.from("friend_requests").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", req.id);
-        await loadFriendRequests();
+        await loadFollowRequests();
         await loadCounts();
       });
       row.querySelector(".decline-btn").addEventListener("click", async () => {
         await supabase.from("friend_requests").update({ status: "declined", responded_at: new Date().toISOString() }).eq("id", req.id);
-        await loadFriendRequests();
+        await loadFollowRequests();
       });
       listEl.appendChild(row);
     }
   }
 
-  async function getRelationship(otherUserId) {
+  // Directional: only "do I (the viewer) follow viewingUserId" — whether
+  // viewingUserId follows ME is a separate relationship, surfaced instead
+  // in my own Follow requests list.
+  async function getFollowRelationship(otherUserId) {
     const { data } = await supabase
       .from("friend_requests")
-      .select("id, requester_id, status")
-      .or(`and(requester_id.eq.${session.user.id},recipient_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},recipient_id.eq.${session.user.id})`)
+      .select("id, status")
+      .eq("requester_id", session.user.id)
+      .eq("recipient_id", otherUserId)
       .maybeSingle();
     return data;
   }
 
-  async function renderFriendAction() {
+  async function renderFollowAction() {
     const el = document.getElementById("friendActionArea");
-    const rel = await getRelationship(viewingUserId);
+    const rel = await getFollowRelationship(viewingUserId);
 
     if (rel?.status === "accepted") {
-      el.innerHTML = `<button id="unfriendBtn" class="btn btn-danger">Unfriend</button>`;
-      el.querySelector("#unfriendBtn").addEventListener("click", async () => {
-        if (!confirm(`Remove ${profileCache?.username || "this person"} as a friend?`)) return;
+      el.innerHTML = `<button id="unfollowBtn" class="btn btn-danger">Following</button>`;
+      el.querySelector("#unfollowBtn").addEventListener("click", async () => {
+        if (!confirm(`Unfollow ${profileCache?.username || "this person"}?`)) return;
         await supabase.from("friend_requests").delete().eq("id", rel.id);
-        renderFriendAction();
+        renderFollowAction();
         loadCounts();
       });
-    } else if (rel?.status === "pending" && rel.requester_id === session.user.id) {
-      el.innerHTML = `<span class="pill">Request sent</span>`;
     } else if (rel?.status === "pending") {
-      el.innerHTML = `<button id="acceptHereBtn" class="btn btn-primary">Accept request</button>`;
-      el.querySelector("#acceptHereBtn").addEventListener("click", async () => {
-        await supabase.from("friend_requests").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", rel.id);
-        renderFriendAction();
-        loadCounts();
+      el.innerHTML = `<button id="cancelRequestBtn" class="btn">Requested</button>`;
+      el.querySelector("#cancelRequestBtn").addEventListener("click", async () => {
+        await supabase.from("friend_requests").delete().eq("id", rel.id);
+        renderFollowAction();
       });
     } else {
-      el.innerHTML = `<button id="addFriendBtn" class="btn btn-primary">Add friend</button>`;
-      el.querySelector("#addFriendBtn").addEventListener("click", async () => {
+      el.innerHTML = `<button id="followBtn" class="btn btn-primary">Follow</button>`;
+      el.querySelector("#followBtn").addEventListener("click", async () => {
         const { error } = await supabase.from("friend_requests").insert({ requester_id: session.user.id, recipient_id: viewingUserId });
         if (error) return alert(error.message);
-        renderFriendAction();
+        renderFollowAction();
       });
     }
   }
 
-  function setupFriendsCountButton() {
-    const btn = document.getElementById("friendsCountBtn");
-    if (!isOwnProfile) {
-      btn.style.cursor = "default";
-      return;
-    }
-    btn.addEventListener("click", openFriendsModal);
+  function setupFollowCountButtons() {
+    document.getElementById("followersCountBtn").addEventListener("click", () => openFollowListModal("followers"));
+    document.getElementById("followingCountBtn").addEventListener("click", () => openFollowListModal("following"));
   }
 
-  // Half-screen popup — "Friends" + X, a divider, then a search box that
-  // filters the already-loaded friends list client-side (finding a new
-  // person to friend now happens through the app-wide search instead).
-  async function openFriendsModal() {
+  // Half-screen popup listing either followers (people who follow
+  // viewingUserId) or following (people viewingUserId follows) — same
+  // pattern as other half-screen popups (drag handle, centered).
+  async function openFollowListModal(kind) {
+    const title = kind === "followers" ? "Followers" : "Following";
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
     backdrop.innerHTML = `
       <div class="modal pin-detail-modal friends-modal stack">
         <div class="post-header">
-          <strong class="post-title hide-title-mobile">Friends</strong>
+          <strong class="post-title hide-title-mobile">${title}</strong>
           <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
           <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
         </div>
         <div class="friends-body stack">
-          <input id="friendFilterInput" class="popup-search-input" placeholder="Search your friends" />
+          <input id="friendFilterInput" class="popup-search-input" placeholder="Search ${title.toLowerCase()}" />
           <div id="currentFriendsList" class="stack">${skeletonListHtml(4, { avatar: true })}</div>
         </div>
       </div>
@@ -198,60 +204,71 @@ if (session) {
     modalEl.querySelector(".post-close-btn").addEventListener("click", close);
     setupSheetDrag(modalEl, { onDismiss: close });
 
-    const { data: accepted } = await supabase
+    const matchCol = kind === "followers" ? "recipient_id" : "requester_id";
+    const otherCol = kind === "followers" ? "requester_id" : "recipient_id";
+    const { data: rows } = await supabase
       .from("friend_requests")
       .select("id, requester_id, recipient_id")
       .eq("status", "accepted")
-      .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
+      .eq(matchCol, viewingUserId);
 
-    const friendIds = (accepted || []).map((r) => (r.requester_id === session.user.id ? r.recipient_id : r.requester_id));
-    let friends = [];
-    if (friendIds.length) {
-      const { data } = await supabase.from("profiles").select("id, username, avatar_url").in("id", friendIds);
-      friends = data || [];
+    const otherIds = (rows || []).map((r) => r[otherCol]);
+    let people = [];
+    if (otherIds.length) {
+      const { data } = await supabase.from("profiles").select("id, username, avatar_url").in("id", otherIds);
+      people = data || [];
     }
 
     const signedByPath = {};
-    const avatarPaths = friends.map((f) => f.avatar_url).filter(Boolean);
+    const avatarPaths = people.map((p) => p.avatar_url).filter(Boolean);
     if (avatarPaths.length) {
       const { data: signed } = await supabase.storage.from("media").createSignedUrls(avatarPaths, 3600);
       (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
     }
 
+    // Only the owner of this list can remove entries: unfollow someone in
+    // their own Following list, or remove a follower from their own
+    // Followers list. Viewing someone else's list is view-only.
+    const canManage = isOwnProfile;
+
     function renderList(filterText) {
       const listEl = modalEl.querySelector("#currentFriendsList");
-      const filtered = friends.filter((f) => f.username.toLowerCase().includes(filterText.toLowerCase()));
+      const filtered = people.filter((p) => p.username.toLowerCase().includes(filterText.toLowerCase()));
       if (!filtered.length) {
-        listEl.innerHTML = `<p class="muted">${friends.length ? "No friends match that search." : "No friends yet."}</p>`;
+        listEl.innerHTML = `<p class="muted">${people.length ? `No ${title.toLowerCase()} match that search.` : `No ${title.toLowerCase()} yet.`}</p>`;
         return;
       }
       listEl.innerHTML = "";
-      for (const friend of filtered) {
-        const reqRow = accepted.find((r) => r.requester_id === friend.id || r.recipient_id === friend.id);
-        const avatarUrl = friend.avatar_url && signedByPath[friend.avatar_url];
+      for (const person of filtered) {
+        const row = rows.find((r) => r[otherCol] === person.id);
+        const avatarUrl = person.avatar_url && signedByPath[person.avatar_url];
         const avatarHtml = avatarUrl
           ? `<img class="avatar" style="width:32px; height:32px;" src="${avatarUrl}" />`
           : avatarPlaceholderHtml("avatar", "width:32px; height:32px;");
-        const row = document.createElement("div");
-        row.className = "row-between";
-        row.innerHTML = `
+        const rowEl = document.createElement("div");
+        rowEl.className = "row-between";
+        rowEl.innerHTML = `
           <button class="btn-link goto-profile row" style="padding:0; gap:0.5rem; color:var(--text);">
             ${avatarHtml}
-            <span>${escapeHtml(friend.username)}</span>
+            <span>${escapeHtml(person.username)}</span>
           </button>
-          <button class="btn btn-danger unfriend-btn">Unfriend</button>
+          ${canManage ? `<button class="btn btn-danger manage-btn">${kind === "followers" ? "Remove" : "Unfollow"}</button>` : ""}
         `;
-        row.querySelector(".goto-profile").addEventListener("click", () => {
-          window.location.href = `profile.html?id=${friend.id}`;
+        rowEl.querySelector(".goto-profile").addEventListener("click", () => {
+          window.location.href = `profile.html?id=${person.id}`;
         });
-        row.querySelector(".unfriend-btn").addEventListener("click", async () => {
-          if (!confirm(`Remove ${friend.username} as a friend?`)) return;
-          await supabase.from("friend_requests").delete().eq("id", reqRow.id);
-          friends = friends.filter((f) => f.id !== friend.id);
-          renderList(modalEl.querySelector("#friendFilterInput").value);
-          await loadCounts();
-        });
-        listEl.appendChild(row);
+        const manageBtn = rowEl.querySelector(".manage-btn");
+        if (manageBtn) {
+          manageBtn.addEventListener("click", async () => {
+            const verb = kind === "followers" ? "Remove" : "Unfollow";
+            if (!confirm(`${verb} ${person.username}?`)) return;
+            await supabase.from("friend_requests").delete().eq("id", row.id);
+            people = people.filter((p) => p.id !== person.id);
+            renderList(modalEl.querySelector("#friendFilterInput").value);
+            await loadCounts();
+          });
+        }
+        listEl.appendChild(rowEl);
       }
     }
     renderList("");
@@ -328,7 +345,7 @@ if (session) {
         gridView === "saved"
           ? "No saved posts yet."
           : isOwnProfile
-          ? "No pins yet — open the ⋯ menu above and tap \"Add pin\" to add your first one."
+          ? "No pins yet — tap the + button to add your first one."
           : "No pins to show.";
       empty.innerHTML = `<span style="width:40px; height:40px;">${MAP_OUTLINE_SVG}</span><p class="muted" style="margin:0;">${escapeHtml(text)}</p>`;
       gridEl.appendChild(empty);
@@ -481,38 +498,47 @@ if (session) {
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
     backdrop.innerHTML = `
-      <div class="modal stack">
-        <h2 style="margin:0;">Edit profile</h2>
-        <div class="row">
-          ${
-            hasAvatar
-              ? `<img id="editAvatarImg" class="avatar" style="width:56px; height:56px;" src="${headerAvatarImg.src}" />`
-              : `<span id="editAvatarImg" class="avatar avatar-placeholder" style="width:56px; height:56px;">${PERSON_OUTLINE_SVG}</span>`
-          }
-          <label class="btn">
-            Change photo
-            <input id="editAvatarInput" type="file" accept="image/*" style="display:none;" />
-          </label>
+      <div class="modal pin-detail-modal edit-profile-modal stack">
+        <div class="post-header">
+          <strong class="post-title hide-title-mobile">Edit profile</strong>
+          <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
+          <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
         </div>
-        <form id="editProfileForm" class="stack">
-          <input id="editUsername" placeholder="Username" required maxlength="30" value="${profileCache?.username ?? ""}" />
-          <input id="editFullName" placeholder="Full name" maxlength="120" value="${profileCache?.full_name ?? ""}" />
-          <textarea id="editBio" placeholder="Bio" rows="3" maxlength="280">${profileCache?.bio ?? ""}</textarea>
-          <p class="error-text" id="editProfileError" style="display:none;"></p>
+        <div class="edit-profile-body stack">
           <div class="row">
-            <button type="button" id="editCancelBtn" class="btn" style="flex:1;">Cancel</button>
-            <button type="submit" class="btn btn-primary" style="flex:1;">Save</button>
+            ${
+              hasAvatar
+                ? `<img id="editAvatarImg" class="avatar" style="width:56px; height:56px;" src="${headerAvatarImg.src}" />`
+                : `<span id="editAvatarImg" class="avatar avatar-placeholder" style="width:56px; height:56px;">${PERSON_OUTLINE_SVG}</span>`
+            }
+            <label class="btn">
+              Change photo
+              <input id="editAvatarInput" type="file" accept="image/*" style="display:none;" />
+            </label>
           </div>
-        </form>
+          <form id="editProfileForm" class="stack">
+            <input id="editUsername" placeholder="Username" required maxlength="30" value="${profileCache?.username ?? ""}" />
+            <input id="editFullName" placeholder="Full name" maxlength="120" value="${profileCache?.full_name ?? ""}" />
+            <textarea id="editBio" placeholder="Bio" rows="3" maxlength="280">${profileCache?.bio ?? ""}</textarea>
+            <p class="error-text" id="editProfileError" style="display:none;"></p>
+            <div class="row">
+              <button type="button" id="editCancelBtn" class="btn" style="flex:1;">Cancel</button>
+              <button type="submit" class="btn btn-primary" style="flex:1;">Save</button>
+            </div>
+          </form>
+        </div>
       </div>
     `;
     document.body.appendChild(backdrop);
+    const modalEl = backdrop.querySelector(".edit-profile-modal");
 
     const close = () => backdrop.remove();
     backdrop.addEventListener("click", (e) => {
       if (e.target === backdrop) close();
     });
+    modalEl.querySelector(".post-close-btn").addEventListener("click", close);
     backdrop.querySelector("#editCancelBtn").addEventListener("click", close);
+    setupSheetDrag(modalEl, { onDismiss: close });
 
     backdrop.querySelector("#editAvatarInput").addEventListener("change", async (e) => {
       const file = e.target.files[0];

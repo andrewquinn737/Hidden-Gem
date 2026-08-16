@@ -486,9 +486,9 @@ if (session) {
   }
 
   // ============================================================
-  // 3-dot menu (calendar connections)
+  // Calendar menu (Google Calendar connection)
   // ============================================================
-  function setupSchedMenu() {
+  async function setupSchedMenu() {
     const menuBtn = document.getElementById("schedMenuBtn");
     const dropdown = document.getElementById("schedMenuDropdown");
     menuBtn.addEventListener("click", (e) => {
@@ -497,9 +497,45 @@ if (session) {
     });
     document.addEventListener("click", () => (dropdown.style.display = "none"));
 
-    document.getElementById("connectGoogleBtn").addEventListener("click", () => {
-      alert("Google Calendar sync isn't connected yet — it needs a Google API credential first.");
-    });
+    const connectBtn = document.getElementById("connectGoogleBtn");
+    const connectLabel = document.getElementById("connectGoogleLabel");
+
+    // Returning from the Google OAuth redirect: supabase-js only exposes
+    // provider_token/provider_refresh_token on the session right after the
+    // callback completes (not on later getSession() calls), so this has to
+    // capture them here rather than at some later "check status" point.
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
+    if (freshSession?.provider_token && window.location.hash.includes("access_token")) {
+      if (freshSession.provider_refresh_token) {
+        await supabase.rpc("save_google_calendar_connection", { p_refresh_token: freshSession.provider_refresh_token });
+      }
+      // Clean the #access_token=... fragment Supabase leaves in the URL.
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+
+    async function refreshConnectedState() {
+      const { data } = await supabase.rpc("get_my_calendar_connections");
+      const connected = (data || []).some((c) => c.provider === "google");
+      connectLabel.textContent = connected ? "Google Calendar connected" : "Connect Google Calendar";
+      connectBtn.onclick = connected
+        ? async () => {
+            dropdown.style.display = "none";
+            if (!confirm("Disconnect Google Calendar?")) return;
+            await supabase.rpc("disconnect_calendar", { p_provider: "google" });
+            refreshConnectedState();
+          }
+        : async () => {
+            await supabase.auth.linkIdentity({
+              provider: "google",
+              options: {
+                redirectTo: `${window.location.origin}/scheduler.html`,
+                scopes: "https://www.googleapis.com/auth/calendar.events",
+                queryParams: { access_type: "offline", prompt: "consent" },
+              },
+            });
+          };
+    }
+    await refreshConnectedState();
   }
 
   // ============================================================

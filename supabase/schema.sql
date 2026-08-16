@@ -198,12 +198,13 @@ as $$
         where v.pin_id = p.id and vp.user_id = auth.uid()
       )
       or exists (
+        -- Directional: viewer must be an ACCEPTED follower of the pin's owner
+        -- (Instagram-style follow, not mutual "friendship" — see friend_requests
+        -- table comment). Requires migration_followers.sql to be applied.
         select 1 from public.friend_requests fr
         where fr.status = 'accepted'
-        and (
-          (fr.requester_id = auth.uid() and fr.recipient_id = p.owner_id)
-          or (fr.recipient_id = auth.uid() and fr.requester_id = p.owner_id)
-        )
+        and fr.requester_id = auth.uid()
+        and fr.recipient_id = p.owner_id
       )
     )
   );
@@ -338,6 +339,35 @@ set search_path = public
 as $$
   select provider, created_at from public.calendar_connections where user_id = auth.uid();
 $$;
+
+-- calendar_connections has no client-facing insert/update/delete policies
+-- by design (see the RLS section below) — these two RPCs are the only way
+-- a client can write its own connection, and both are hard-scoped to
+-- auth.uid() so nobody can touch another user's row.
+create or replace function public.save_google_calendar_connection(p_refresh_token text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.calendar_connections (user_id, provider, credential_ciphertext, updated_at)
+  values (auth.uid(), 'google', p_refresh_token, now())
+  on conflict (user_id, provider) do update
+    set credential_ciphertext = excluded.credential_ciphertext, updated_at = now();
+end;
+$$;
+grant execute on function public.save_google_calendar_connection(text) to authenticated;
+
+create or replace function public.disconnect_calendar(p_provider public.calendar_provider)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.calendar_connections where user_id = auth.uid() and provider = p_provider;
+$$;
+grant execute on function public.disconnect_calendar(public.calendar_provider) to authenticated;
 grant execute on function public.get_my_calendar_connections() to authenticated;
 
 -- Claim a pin_invites / visit_participants row by token — this is what
@@ -425,12 +455,11 @@ create policy "pins_select" on public.pins for select using (
     where v.pin_id = pins.id and vp.user_id = auth.uid()
   )
   or exists (
+    -- Directional follow check — see matching note in private.pin_is_visible().
     select 1 from public.friend_requests fr
     where fr.status = 'accepted'
-    and (
-      (fr.requester_id = auth.uid() and fr.recipient_id = pins.owner_id)
-      or (fr.recipient_id = auth.uid() and fr.requester_id = pins.owner_id)
-    )
+    and fr.requester_id = auth.uid()
+    and fr.recipient_id = pins.owner_id
   )
 );
 create policy "pins_insert_self" on public.pins for insert with check (owner_id = auth.uid());
@@ -459,8 +488,10 @@ create policy "friend_requests_select_own" on public.friend_requests
   for select using (requester_id = auth.uid() or recipient_id = auth.uid());
 create policy "friend_requests_insert_self" on public.friend_requests
   for insert with check (requester_id = auth.uid());
-create policy "friend_requests_update_recipient_or_requester" on public.friend_requests
-  for update using (requester_id = auth.uid() or recipient_id = auth.uid());
+-- Only the recipient may accept/decline (enforces that you can't follow
+-- someone without them approving it). Requester still deletes to cancel/unfollow.
+create policy "friend_requests_update_recipient_only" on public.friend_requests
+  for update using (recipient_id = auth.uid());
 create policy "friend_requests_delete_own" on public.friend_requests
   for delete using (requester_id = auth.uid() or recipient_id = auth.uid());
 

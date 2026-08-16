@@ -14,6 +14,7 @@
   --tabbar-active-icon: #221a10;
   --tabbar-active-bg: rgba(34, 26, 16, 0.08);
   --menu-bg: rgba(255, 255, 255, 0.85);
+  --map-toolbar-bg: rgba(255, 255, 255, 0.92);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +33,7 @@
     --tabbar-active-icon: #ffffff;
     --tabbar-active-bg: rgba(255, 255, 255, 0.16);
     --menu-bg: rgba(31, 26, 18, 0.85);
+    --map-toolbar-bg: rgba(31, 26, 18, 0.92);
   }
 }
 
@@ -148,6 +150,13 @@ main {
   justify-content: space-around;
   border-radius: 22px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  /* iOS Safari can visually "detach" a position:fixed element that also
+     uses backdrop-filter during fast/momentum scroll — it drifts along
+     with the page content instead of staying put, which is the reported
+     "bar gets swiped to the middle of the screen" bug. Forcing this onto
+     its own GPU compositing layer keeps it pinned. */
+  transform: translateZ(0);
+  will-change: transform;
   z-index: 50;
 }
 /* 3-dot / style / view-mode dropdown menus — semi-transparent instead of
@@ -168,6 +177,23 @@ main {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
 }
+/* Every row inside a dropdown shares the panel's own translucent
+   background instead of each button carrying its own solid var(--surface)
+   box — that per-button solid box is what read as a "white outline"
+   around each row's text. Also strips btn-primary/btn-danger's special
+   colors inside a dropdown so every row is the same flat tone. */
+.dropdown-menu .btn {
+  background: none;
+  border: none;
+  color: var(--text);
+}
+.dropdown-menu .btn:hover { background: rgba(0, 0, 0, 0.05); }
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
 
 .bottom-tabbar .tab {
   display: flex;
@@ -190,6 +216,26 @@ main {
   display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
   background: none; border: none; padding: 0.6rem 0; color: var(--text);
 }
+
+.fab-add-pin {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 45;
+  border: none;
+}
+.fab-add-pin svg { width: 26px; height: 26px; }
+/* Above the tab bar, not on top of it. */
+html.is-mobile-device .fab-add-pin { bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.75rem); }
 
 html.is-mobile-device .topnav-bar { display: none; }
 html.is-mobile-device .bottom-tabbar { display: flex; }
@@ -338,7 +384,7 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 /* ============================================================
    Friends / Notifications half-screen popups
    ============================================================ */
-.friends-body, .notif-body, .visit-detail-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.85rem; }
+.friends-body, .notif-body, .visit-detail-body, .edit-profile-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.85rem; }
 /* Distance from "Friends" title to the search box must equal the distance
    from the search box to the friend list below it. The header-to-body gap
    is the modal's own 0.75rem .stack gap (friends-modal is both
@@ -349,7 +395,8 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 .friends-modal.pin-detail-modal,
 .notif-modal.pin-detail-modal,
 .visit-detail-modal.pin-detail-modal,
-.share-overlay-modal.pin-detail-modal {
+.share-overlay-modal.pin-detail-modal,
+.edit-profile-modal.pin-detail-modal {
   padding: 0; overflow: hidden; display: flex; flex-direction: column;
 }
 .notif-row {

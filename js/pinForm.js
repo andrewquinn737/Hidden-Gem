@@ -1,10 +1,9 @@
 import { supabase } from "./supabaseClient.js";
 import { cropImageToAspect } from "./imageCrop.js";
 import { setupSheetDrag } from "./sheetDrag.js";
-import { STYLES, ensureMapLibre, retintParchment, tryAddClusterLayers } from "./mapStyles.js";
+import { STYLES, CATEGORIES, ensureMapLibre, retintParchment, tryAddClusterLayers } from "./mapStyles.js";
 
 const MAX_PHOTOS = 3;
-const CATEGORIES = ["Beach", "Camping", "Cliff Jumping", "Hiking", "Hunting", "Other", "Photography", "Roof", "Urban Exploring"];
 const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 const MAP_STYLE_KEY = "hg:mapStyle"; // shared with js/map.js — one preference across the app
 
@@ -85,9 +84,9 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
           <textarea id="pinDirections" rows="2">${escapeHtml(editingPin?.directions)}</textarea>
         </div>
         <div>
-          <label class="field-label" for="pinCategory">Category</label>
+          <label class="field-label" for="pinCategory">Tag</label>
           <select id="pinCategory" required>
-            <option value="">Choose a category…</option>
+            <option value="">Choose a tag…</option>
             ${CATEGORIES.map((c) => `<option value="${c}" ${editingPin?.category === c ? "selected" : ""}>${c}</option>`).join("")}
           </select>
         </div>

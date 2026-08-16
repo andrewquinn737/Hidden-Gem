@@ -4,7 +4,7 @@ import { openPinForm } from "./pinForm.js";
 import { openPinDetail } from "./pinDetailModal.js";
 import { searchPlace } from "./geo.js";
 import { MAP_OUTLINE_SVG } from "./placeholders.js";
-import { STYLES, pinCanvas, retintParchment } from "./mapStyles.js";
+import { STYLES, CATEGORIES, pinCanvas, retintParchment } from "./mapStyles.js";
 
 const PIN_COLORS = {
   mine: "#b5651d", // accent
@@ -84,22 +84,62 @@ if (session) {
     }
   });
 
-  // Friend ids, to color markers by relationship to the pin's owner.
+  // Directional: people I follow (accepted), to color markers by
+  // relationship to the pin's owner. Whether they follow ME is irrelevant
+  // here — same directional model as profile.js's Followers/Following.
   const { data: accepted } = await supabase
     .from("friend_requests")
-    .select("requester_id, recipient_id")
+    .select("recipient_id")
     .eq("status", "accepted")
-    .or(`requester_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`);
-  const friendIds = new Set(
-    (accepted || []).map((r) => (r.requester_id === session.user.id ? r.recipient_id : r.requester_id))
-  );
+    .eq("requester_id", session.user.id);
+  const followingIds = new Set((accepted || []).map((r) => r.recipient_id));
 
+  let allPins = [];
   let pinsById = {};
   let pendingFeatures = [];
 
+  // Same three-way split as the marker colors: a pin is "mine", from
+  // someone I "following", or a stranger's "public" pin — mutually
+  // exclusive, so the Accounts filter checkboxes never overlap.
+  function bucketFor(pin) {
+    if (pin.owner_id === session.user.id) return "mine";
+    if (followingIds.has(pin.owner_id)) return "following";
+    return "public";
+  }
   function iconIdFor(pin) {
-    const isMine = pin.owner_id === session.user.id;
-    return isMine ? "pin-mine" : friendIds.has(pin.owner_id) ? "pin-friend" : "pin-other";
+    const bucket = bucketFor(pin);
+    return bucket === "mine" ? "pin-mine" : bucket === "following" ? "pin-friend" : "pin-other";
+  }
+
+  const FILTER_KEY = "hg:mapFilters";
+  const filterState = loadFilterState();
+  function loadFilterState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILTER_KEY) || "null");
+      if (saved) return { accounts: new Set(saved.accounts), tags: new Set(saved.tags) };
+    } catch {
+      // fall through to defaults
+    }
+    return { accounts: new Set(["public", "following", "mine"]), tags: new Set(CATEGORIES) };
+  }
+  function saveFilterState() {
+    localStorage.setItem(
+      FILTER_KEY,
+      JSON.stringify({ accounts: [...filterState.accounts], tags: [...filterState.tags] })
+    );
+  }
+
+  function applyFilters() {
+    const features = allPins
+      .filter((pin) => filterState.accounts.has(bucketFor(pin)) && (!pin.category || filterState.tags.has(pin.category)))
+      .map((pin) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [pin.lng, pin.lat] },
+        properties: { id: pin.id, iconId: iconIdFor(pin) },
+      }));
+    pendingFeatures = features;
+    const source = map.getSource("pins");
+    if (source) source.setData({ type: "FeatureCollection", features });
   }
 
   async function loadPins() {
@@ -110,18 +150,10 @@ if (session) {
       console.error(error);
       return;
     }
+    allPins = pins;
     pinsById = {};
-    const features = pins.map((pin) => {
-      pinsById[pin.id] = pin;
-      return {
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [pin.lng, pin.lat] },
-        properties: { id: pin.id, iconId: iconIdFor(pin) },
-      };
-    });
-    pendingFeatures = features;
-    const source = map.getSource("pins");
-    if (source) source.setData({ type: "FeatureCollection", features });
+    pins.forEach((pin) => (pinsById[pin.id] = pin));
+    applyFilters();
   }
 
   // Registers the pin icons + clustering source/layers. Custom images and
@@ -143,7 +175,10 @@ if (session) {
         data: { type: "FeatureCollection", features: pendingFeatures },
         cluster: true,
         clusterMaxZoom: 14,
-        clusterRadius: 50,
+        // Tight radius (close to a single marker's own footprint) so
+        // points only merge into a cluster once they'd actually overlap
+        // on screen, not just because they're roughly nearby.
+        clusterRadius: 40,
       });
     }
     if (!map.getLayer("clusters")) {
@@ -154,7 +189,9 @@ if (session) {
         filter: ["has", "point_count"],
         paint: {
           "circle-color": "#b5651d",
-          "circle-radius": ["step", ["get", "point_count"], 16, 10, 22, 30, 28],
+          // Fixed size regardless of point_count — only the number inside
+          // changes, so a cluster never visually "grows" as pins gather.
+          "circle-radius": 18,
           "circle-stroke-width": 2,
           "circle-stroke-color": "#fff",
         },
@@ -182,10 +219,14 @@ if (session) {
 
       map.on("click", "clusters", (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+        if (!features.length) return;
         const clusterId = features[0].properties.cluster_id;
+        const coords = features[0].geometry.coordinates;
         map.getSource("pins").getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err) return;
-          map.easeTo({ center: features[0].geometry.coordinates, zoom });
+          // Fall back to a fixed zoom-in step if the exact expansion zoom
+          // can't be computed, so a click always visibly does something —
+          // worst case it takes one extra click to fully split a cluster.
+          map.easeTo({ center: coords, zoom: err ? map.getZoom() + 2.5 : zoom });
         });
       });
       map.on("click", "unclustered-point", (e) => {
@@ -305,19 +346,30 @@ if (session) {
     }
   }
 
-  // Style switcher — street / satellite / parchment
-  const styleBtn = document.getElementById("mapStyleBtn");
-  const styleDropdown = document.getElementById("mapStyleDropdown");
-  styleBtn?.addEventListener("click", (e) => {
+  // Map options menu — Map (style), Accounts, Tag, each an accordion
+  // section within the one 3-dot dropdown.
+  const menuBtn = document.getElementById("mapMenuBtn");
+  const menuDropdown = document.getElementById("mapMenuDropdown");
+  menuBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
-    styleDropdown.style.display = styleDropdown.style.display === "none" ? "flex" : "none";
+    menuDropdown.style.display = menuDropdown.style.display === "none" ? "flex" : "none";
   });
+  menuDropdown?.addEventListener("click", (e) => e.stopPropagation());
   document.addEventListener("click", () => {
-    if (styleDropdown) styleDropdown.style.display = "none";
+    if (menuDropdown) menuDropdown.style.display = "none";
   });
+  document.querySelectorAll(".map-filter-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sub = document.getElementById(btn.dataset.submenu);
+      const wasOpen = sub.classList.contains("open");
+      document.querySelectorAll(".map-filter-submenu").forEach((s) => s.classList.remove("open"));
+      if (!wasOpen) sub.classList.add("open");
+    });
+  });
+
   document.querySelectorAll("[data-map-style]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      styleDropdown.style.display = "none";
+      menuDropdown.style.display = "none";
       const key = btn.dataset.mapStyle;
       if (key === currentStyleKey) return;
       currentStyleKey = key;
@@ -325,6 +377,36 @@ if (session) {
       map.setStyle(STYLES[key]);
     });
   });
+
+  // Accounts filter
+  document.querySelectorAll("[data-account-filter]").forEach((checkbox) => {
+    checkbox.checked = filterState.accounts.has(checkbox.dataset.accountFilter);
+    checkbox.addEventListener("change", () => {
+      const key = checkbox.dataset.accountFilter;
+      if (checkbox.checked) filterState.accounts.add(key);
+      else filterState.accounts.delete(key);
+      saveFilterState();
+      applyFilters();
+    });
+  });
+
+  // Tag filter — built from the same tag list pins are created with,
+  // everything on by default.
+  const tagSub = document.getElementById("tagSub");
+  if (tagSub) {
+    tagSub.innerHTML = CATEGORIES.map(
+      (tag) => `<label class="map-filter-check-row"><input type="checkbox" data-tag-filter="${tag}" ${filterState.tags.has(tag) ? "checked" : ""} /> ${tag}</label>`
+    ).join("");
+    tagSub.querySelectorAll("[data-tag-filter]").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const key = checkbox.dataset.tagFilter;
+        if (checkbox.checked) filterState.tags.add(key);
+        else filterState.tags.delete(key);
+        saveFilterState();
+        applyFilters();
+      });
+    });
+  }
 
   // Hold anywhere on the map to drop a new pin there. Pointer Events unify
   // mouse + touch; detection lives on the map's own DOM container rather

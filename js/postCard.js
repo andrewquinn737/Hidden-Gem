@@ -113,11 +113,25 @@ export async function renderPostCard(pin, container, options = {}) {
           ${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}
           <div class="post-menu-wrap" style="position:relative;">
             <button class="post-menu-btn" aria-label="Post menu">⋯</button>
-            <div class="post-menu-dropdown card dropdown-menu stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:160px; padding:0.4rem; gap:0.25rem;">
-              <button class="btn post-schedule-btn" style="width:100%; text-align:left; border:none;">Schedule visit</button>
+            <div class="post-menu-dropdown card dropdown-menu stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:170px; padding:0.4rem; gap:0.25rem;">
+              <button class="btn dropdown-item post-schedule-btn" style="width:100%; text-align:left;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span>Schedule visit</span>
+              </button>
               ${
                 ownerMenuEnabled && isOwner
-                  ? '<button class="btn post-share-btn" style="width:100%; text-align:left; border:none;">Share</button><button class="btn post-edit-btn" style="width:100%; text-align:left; border:none;">Edit</button><button class="btn btn-danger post-delete-btn" style="width:100%; text-align:left; border:none;">Delete</button>'
+                  ? `<button class="btn dropdown-item post-share-btn" style="width:100%; text-align:left;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>
+                      <span>Share</span>
+                    </button>
+                    <button class="btn dropdown-item post-edit-btn" style="width:100%; text-align:left;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                      <span>Edit</span>
+                    </button>
+                    <button class="btn dropdown-item btn-danger post-delete-btn" style="width:100%; text-align:left;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      <span>Delete</span>
+                    </button>`
                   : ""
               }
             </div>

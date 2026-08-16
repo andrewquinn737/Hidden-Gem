@@ -46,7 +46,7 @@ if (session) {
           <h1 style="margin:0;">${escapeHtml(pin.title)}</h1>
           <span class="pill">${pin.visibility}</span>
         </div>
-        <p class="muted">by ${escapeHtml(owner?.username || "someone")} · ${escapeHtml(pin.category || "uncategorized")}</p>
+        <p class="muted">by ${escapeHtml(owner?.username || "someone")} · ${escapeHtml(pin.category || "untagged")}</p>
         ${pin.description ? `<p>${escapeHtml(pin.description)}</p>` : ""}
         ${photoUrls.length ? `<div class="photo-grid">${photoUrls.map((u) => `<img src="${u}" />`).join("")}</div>` : ""}
         ${pin.directions ? `<div class="card"><strong>How to get there</strong><p style="margin:0.35rem 0 0;">${escapeHtml(pin.directions)}</p></div>` : ""}

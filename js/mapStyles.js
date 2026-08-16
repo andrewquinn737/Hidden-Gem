@@ -3,11 +3,19 @@
 // visually and behaviorally consistent — same tile styles, same pin
 // artwork, same "style not ready yet, retry" workaround.
 
+// Shared with the map's Tag filter menu — "Other" always sorts last,
+// everything else stays alphabetical.
+export const CATEGORIES = ["Beach", "Camping", "Cliff Jumping", "Hiking", "Hunting", "Photography", "Roof", "Urban Exploring", "Other"];
+
 export const STYLES = {
   street: "https://tiles.openfreemap.org/styles/liberty",
   parchment: "https://tiles.openfreemap.org/styles/positron",
   satellite: {
     version: 8,
+    // Without a glyphs endpoint, any text symbol layer (e.g. cluster-count
+    // labels) silently renders no text on this style — reuse OpenFreeMap's
+    // font glyphs, which is independent of the tile source itself.
+    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
     sources: {
       esri: {
         type: "raster",
@@ -25,31 +33,70 @@ export const STYLES = {
 // image, not an arbitrary DOM element, to support native clustering).
 export function pinCanvas(color) {
   const scale = 3;
+  // Extra top/side margin so the drop shadow isn't clipped by the canvas
+  // bounds — no bottom margin, so the shape's bottom tip stays exactly at
+  // the canvas's bottom edge (icon-anchor: "bottom" relies on that for
+  // the marker to sit precisely on its coordinate, not float above it).
+  const pad = 4;
   const canvas = document.createElement("canvas");
-  canvas.width = 28 * scale;
-  canvas.height = 40 * scale;
+  canvas.width = (28 + pad * 2) * scale;
+  canvas.height = (40 + pad) * scale;
   const ctx = canvas.getContext("2d");
   ctx.scale(scale, scale);
-  ctx.beginPath();
-  ctx.moveTo(14, 0);
-  ctx.bezierCurveTo(6.3, 0, 0, 6.3, 0, 14);
-  ctx.bezierCurveTo(0, 24.5, 14, 40, 14, 40);
-  ctx.bezierCurveTo(14, 40, 28, 24.5, 28, 14);
-  ctx.bezierCurveTo(28, 6.3, 21.7, 0, 14, 0);
-  ctx.closePath();
+  ctx.translate(pad, pad);
+
+  function dropPath() {
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.bezierCurveTo(6.3, 0, 0, 6.3, 0, 14);
+    ctx.bezierCurveTo(0, 24.5, 14, 40, 14, 40);
+    ctx.bezierCurveTo(14, 40, 28, 24.5, 28, 14);
+    ctx.bezierCurveTo(28, 6.3, 21.7, 0, 14, 0);
+    ctx.closePath();
+  }
+
+  // Soft shadow for a bit of depth, then the crisp shape on top (drawn
+  // twice — once for shadow, once clean — since shadow settings also
+  // apply to the stroke/fill if left on for those).
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1.5;
+  dropPath();
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.lineWidth = 1.5;
+  ctx.restore();
+
+  dropPath();
+  const gradient = ctx.createLinearGradient(0, 0, 0, 40);
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, shade(color, -18));
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  ctx.lineWidth = 2;
   ctx.strokeStyle = "#fff";
   ctx.stroke();
+
   ctx.beginPath();
-  ctx.arc(14, 14, 5, 0, Math.PI * 2);
+  ctx.arc(14, 14, 4.5, 0, Math.PI * 2);
   ctx.fillStyle = "#fff";
   ctx.fill();
+
   // addImage on this MapLibre build only accepts ImageData (or a plain
   // {width,height,data} object) — a raw canvas/HTMLCanvasElement throws a
   // "mismatched image size" RangeError.
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+// Darkens (negative amt) or lightens (positive amt) a #rrggbb color by amt
+// percent, for a subtle top-to-bottom gradient on the pin drop.
+function shade(hex, amt) {
+  const num = parseInt(hex.slice(1), 16);
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const r = clamp(((num >> 16) & 0xff) + Math.round((amt / 100) * 255));
+  const g = clamp(((num >> 8) & 0xff) + Math.round((amt / 100) * 255));
+  const b = clamp((num & 0xff) + Math.round((amt / 100) * 255));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 
 export function retintParchment(map, styleKey) {
@@ -108,7 +155,7 @@ function addClusterLayers(map, { sourceId, color, features }) {
       data: { type: "FeatureCollection", features },
       cluster: true,
       clusterMaxZoom: 14,
-      clusterRadius: 50,
+      clusterRadius: 40,
     });
   }
   if (!map.getLayer(`${sourceId}-clusters`)) {
@@ -119,7 +166,7 @@ function addClusterLayers(map, { sourceId, color, features }) {
       filter: ["has", "point_count"],
       paint: {
         "circle-color": color,
-        "circle-radius": ["step", ["get", "point_count"], 16, 10, 22, 30, 28],
+        "circle-radius": 18,
         "circle-stroke-width": 2,
         "circle-stroke-color": "#fff",
       },
