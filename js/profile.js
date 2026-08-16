@@ -49,6 +49,9 @@ if (session) {
   await loadPinsGrid();
   setupFriendsCountButton();
 
+  const openPinId = params.get("openPinId");
+  if (openPinId) openPinDetailFullscreen(openPinId, {});
+
   async function loadProfile() {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", viewingUserId).single();
     profileCache = profile;
@@ -362,13 +365,13 @@ if (session) {
         .eq("recipient_id", session.user.id)
         .eq("status", "pending"),
       myPinIds.length
-        ? supabase.from("pin_comments").select("id, pin_id, user_id, created_at, profiles(username)").in("pin_id", myPinIds).order("created_at", { ascending: false }).limit(30)
+        ? supabase.from("pin_comments").select("id, pin_id, user_id, created_at, profiles(username)").in("pin_id", myPinIds).neq("user_id", session.user.id).order("created_at", { ascending: false }).limit(30)
         : { data: [] },
       myPinIds.length
-        ? supabase.from("pin_likes").select("pin_id, user_id, created_at, profiles(username)").in("pin_id", myPinIds).order("created_at", { ascending: false }).limit(30)
+        ? supabase.from("pin_likes").select("pin_id, user_id, created_at, profiles(username)").in("pin_id", myPinIds).neq("user_id", session.user.id).order("created_at", { ascending: false }).limit(30)
         : { data: [] },
       myPinIds.length
-        ? supabase.from("pin_saves").select("pin_id, user_id, created_at, profiles(username)").in("pin_id", myPinIds).order("created_at", { ascending: false }).limit(30)
+        ? supabase.from("pin_saves").select("pin_id, user_id, created_at, profiles(username)").in("pin_id", myPinIds).neq("user_id", session.user.id).order("created_at", { ascending: false }).limit(30)
         : { data: [] },
     ]);
 

@@ -31,11 +31,19 @@
   .map-toolbar form { flex: 1; min-width: 160px; display: flex; }
   .map-toolbar input { border-radius: var(--radius) 0 0 var(--radius); }
   .map-toolbar button[type=submit] { border-radius: 0 var(--radius) var(--radius) 0; }
-  /* Nudge the zoom control up so it clears the floating mobile tab bar
-     instead of sitting underneath/behind it. */
+  /* Align the zoom control with the floating mobile tab bar: same right
+     inset, sitting just above its top edge instead of underneath/behind
+     it. 4.25rem ≈ the tab bar's own height (~3.75rem) plus a small gap. */
   html.is-mobile-device .maplibregl-ctrl-bottom-right {
-    margin-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    right: 0;
+    margin-right: 0.75rem;
+    margin-bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.25rem);
   }
+  /* The GeolocateControl's own button is hidden — the toolbar's 📍 button
+     triggers it programmatically instead, so there's one location button
+     in the UI, not two. Its blue-dot marker (and the top-left corner it's
+     otherwise anchored to) stays untouched. */
+  .maplibregl-ctrl-top-left { display: none; }
 </style>
 </head>
 <body data-page="index.html">

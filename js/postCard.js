@@ -89,14 +89,17 @@ export async function renderPostCard(pin, container, options = {}) {
   card.classList.add("post-card");
 
   // Description flows right after the name; directions gets its own line
-  // below, but both still count toward the same 3-line clamp.
+  // below, but both still count toward the same 3-line clamp. A fullscreen
+  // popup (startFull — reached from Profile, search, etc.) has plenty of
+  // room for the whole thing, so only clamp in the more cramped feed/
+  // half-screen contexts.
   const descriptionText = pin.description || "";
   const directionsText = pin.directions ? `How to get there: ${pin.directions}` : "";
-  const captionLong = descriptionText.length + directionsText.length > 140;
+  const captionLong = !startFull && descriptionText.length + directionsText.length > 140;
 
   card.innerHTML = `
     <div class="post-header">
-      <strong class="post-title">${escapeHtml(pin.title)}</strong>
+      <button class="btn-link post-title" style="padding:0; text-align:left;">${escapeHtml(pin.title)}</button>
       <div class="post-header-center">
         <span class="post-drag-handle" aria-hidden="true"></span>
       </div>
@@ -131,9 +134,14 @@ export async function renderPostCard(pin, container, options = {}) {
     </div>
 
     <div class="post-body">
-      <p class="post-caption ${captionLong ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile">${ownerAvatarUrl ? `<img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" />` : avatarPlaceholderHtml("avatar post-owner-avatar")}</button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}${captionLong ? ' <button class="post-showmore-btn">more</button>' : ""}</p>
+      <p class="post-caption ${captionLong ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile">${ownerAvatarUrl ? `<img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" />` : avatarPlaceholderHtml("avatar post-owner-avatar")}</button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}${captionLong ? ' <button class="post-showmore-btn">see more</button>' : ""}</p>
     </div>
   `;
+
+  card.querySelector(".post-title").addEventListener("click", () => {
+    window.location.href = `profile.html?id=${pin.owner_id}&openPinId=${pin.id}`;
+  });
+  fitTitleText(card.querySelector(".post-title"));
 
   card.querySelector(".post-owner-name").addEventListener("click", () => {
     window.location.href = `profile.html?id=${pin.owner_id}`;
@@ -385,6 +393,19 @@ async function openCommentsPopup(pin, currentUserId, onCountChange) {
   });
 
   await loadComments();
+}
+
+// Shrinks the title's font-size instead of ellipsis-truncating it, but
+// only once it's genuinely about to crowd its column (the category pill
+// lives in the header's other outer column) — most titles never trigger
+// this since pin names are capped at 25 characters.
+function fitTitleText(el) {
+  el.style.fontSize = "";
+  let size = 1;
+  while (el.scrollWidth > el.clientWidth + 1 && size > 0.7) {
+    size -= 0.05;
+    el.style.fontSize = `${size}em`;
+  }
 }
 
 function escapeHtml(str) {

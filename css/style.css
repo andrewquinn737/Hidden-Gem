@@ -108,10 +108,7 @@ main {
   font-size: 0.8rem;
   color: var(--text-muted);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-align: center;
-  max-width: 110px;
 }
 
 /* ============================================================
@@ -134,7 +131,10 @@ main {
 .bottom-tabbar {
   display: none;
   position: fixed;
-  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  /* max(), not +, so the bar sits exactly 0.75rem off the bottom edge on
+     devices with no safe area (matching the 0.75rem side insets) instead
+     of always stacking an extra 0.75rem on top of the safe area. */
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
   left: 0.75rem;
   right: 0.75rem;
   background: var(--tabbar-bg);
@@ -167,9 +167,8 @@ main {
    ============================================================ */
 .search-result-row {
   display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
-  background: none; border: none; border-bottom: 1px solid var(--border); padding: 0.6rem 0; color: var(--text);
+  background: none; border: none; padding: 0.6rem 0; color: var(--text);
 }
-.search-result-row:last-child { border-bottom: none; }
 
 html.is-mobile-device .topnav-bar { display: none; }
 html.is-mobile-device .bottom-tabbar { display: flex; }
@@ -498,7 +497,13 @@ html.is-mobile-device .hide-title-mobile { display: none; }
   z-index: 5;
   background: var(--surface);
 }
-.post-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* No ellipsis — js/postCard.js's fitTitleText() shrinks the font-size
+   instead when the title is about to crowd the category pill, so the
+   full title stays readable rather than getting cut off with "…". It's a
+   .btn-link (tap it to jump to the poster's profile with this post open),
+   so its color/font/size need re-asserting over that class's gray link
+   styling. */
+.post-title { font: inherit; font-weight: 700; color: var(--text); overflow: hidden; white-space: nowrap; }
 .post-header-end { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
 .post-header-center { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
 /* The handle graphic is small, but inside a popup the whole column is the
@@ -579,9 +584,16 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 /* Bottom-sheet grow/shrink via the drag handle — see js/sheetDrag.js */
 .pin-detail-modal { transition: max-height 0.2s ease, height 0.2s ease, border-radius 0.2s ease; }
 .pin-detail-modal.sheet-full {
-  height: 100vh; max-height: 100vh; border-radius: 0;
+  height: 100vh; max-height: 100vh; border-radius: 0; border: none;
+  /* 100vh is the mobile browser's *large* viewport (includes the area
+     hidden behind a visible address bar) while the backdrop's inset:0
+     resolves against the small one — the mismatch pushed the sheet's
+     header above the top of the actually-visible screen, with no way to
+     reach the close/drag handle. 100dvh tracks the real visible height;
+     kept 100vh right above as a fallback for browsers without dvh. */
+  height: 100dvh; max-height: 100dvh;
 }
-html.is-desktop-device .pin-detail-modal.sheet-full { border-radius: var(--radius); }
+html.is-desktop-device .pin-detail-modal.sheet-full { border-radius: var(--radius); border: 1px solid var(--border); }
 
 /* ============================================================
    Photo crop tool (js/imageCrop.js)

@@ -98,7 +98,35 @@ export async function signOut() {
 // popup can move the underlying page, which throws off the drag-handle's
 // pointer math (it stops responding to expand/collapse gestures) —
 // applies to every popup automatically since it just watches the DOM.
+//
+// Plain `overflow:hidden` on body isn't enough on mobile Safari/Chrome —
+// it still lets the page scroll behind an open popup once an on-screen
+// keyboard is up (a focused search input, say), because the keyboard
+// resizes the visual viewport out from under a merely-hidden-overflow
+// body. Pinning the body with `position:fixed` at its current scroll
+// offset is the technique that actually holds on mobile; scroll position
+// is restored when the last backdrop closes.
 let openBackdropCount = 0;
+let savedScrollY = 0;
+function updateBodyScrollLock() {
+  const locked = openBackdropCount > 0;
+  const alreadyLocked = document.body.style.position === "fixed";
+  if (locked && !alreadyLocked) {
+    savedScrollY = window.scrollY;
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.overflow = "hidden";
+  } else if (!locked && alreadyLocked) {
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.overflow = "";
+    window.scrollTo(0, savedScrollY);
+  }
+}
 new MutationObserver((mutations) => {
   for (const m of mutations) {
     for (const node of m.addedNodes) {
@@ -112,5 +140,5 @@ new MutationObserver((mutations) => {
       }
     }
   }
-  document.body.style.overflow = openBackdropCount > 0 ? "hidden" : "";
+  updateBodyScrollLock();
 }).observe(document.body, { childList: true });

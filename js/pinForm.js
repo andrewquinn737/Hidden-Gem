@@ -1,35 +1,22 @@
 import { supabase } from "./supabaseClient.js";
 import { cropImageToAspect } from "./imageCrop.js";
 import { setupSheetDrag } from "./sheetDrag.js";
+import { STYLES, ensureMapLibre, retintParchment, tryAddClusterLayers } from "./mapStyles.js";
 
 const MAX_PHOTOS = 3;
 const CATEGORIES = ["Camping", "Hiking", "Urban Exploring", "Cliff Jumping", "Roof", "Beach"];
 const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const MAP_STYLE_KEY = "hg:mapStyle"; // shared with js/map.js — one preference across the app
 
-async function ensureLeaflet() {
-  if (window.L) return;
-  if (!document.querySelector("link[data-leaflet]")) {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    link.setAttribute("data-leaflet", "1");
-    document.head.appendChild(link);
-  }
-  if (!document.querySelector("script[data-leaflet]")) {
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.setAttribute("data-leaflet", "1");
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-}
-
-function locationIcon() {
-  const svg = `<svg width="28" height="40" viewBox="0 0 28 40" xmlns="http://www.w3.org/2000/svg"><path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.3 21.7 0 14 0z" fill="#b5651d" stroke="#fff" stroke-width="1.5"/><circle cx="14" cy="14" r="5" fill="#fff"/></svg>`;
-  return L.divIcon({ className: "custom-pin-icon", html: svg, iconSize: [28, 40], iconAnchor: [14, 40] });
+// The location-picker marker (the pin being placed/edited) — same
+// orange-flag artwork as before, just as a plain DOM element for
+// maplibregl.Marker instead of a Leaflet divIcon.
+function locationMarkerEl() {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<svg width="28" height="40" viewBox="0 0 28 40" xmlns="http://www.w3.org/2000/svg"><path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.3 21.7 0 14 0z" fill="#b5651d" stroke="#fff" stroke-width="1.5"/><circle cx="14" cy="14" r="5" fill="#fff"/></svg>`;
+  const el = wrap.firstElementChild;
+  el.style.cursor = "grab";
+  return el;
 }
 
 // Half-screen popup (drag handle, defaults to fullscreen since there's a
@@ -80,7 +67,7 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       <form id="pinForm" class="pin-form-body stack">
         <div>
           <label class="field-label" for="pinTitle">Name</label>
-          <input id="pinTitle" required maxlength="120" value="${attr(editingPin?.title)}" />
+          <input id="pinTitle" required maxlength="25" value="${attr(editingPin?.title)}" />
         </div>
 
         <div>
@@ -107,7 +94,17 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
 
         <div>
           <label class="field-label">Location</label>
-          <div id="pinLocationMap" style="height:180px; border-radius: var(--radius); overflow:hidden;"></div>
+          <div style="position:relative; height:240px; border-radius: var(--radius); overflow:hidden;">
+            <div id="pinLocationMap" style="height:100%;"></div>
+            <div style="position:absolute; top:0.5rem; right:0.5rem; z-index:1;">
+              <button type="button" id="pinMapStyleBtn" class="btn" style="padding:0.35rem 0.5rem;">🗺️</button>
+              <div id="pinMapStyleDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:1; min-width:120px; padding:0.4rem; gap:0.25rem;">
+                <button type="button" class="btn" data-pin-map-style="street" style="width:100%; text-align:left; border:none;">Street</button>
+                <button type="button" class="btn" data-pin-map-style="satellite" style="width:100%; text-align:left; border:none;">Satellite</button>
+                <button type="button" class="btn" data-pin-map-style="parchment" style="width:100%; text-align:left; border:none;">Parchment</button>
+              </div>
+            </div>
+          </div>
           <div class="row" style="margin-top:0.5rem;">
             <input id="pinLat" type="number" step="any" placeholder="Latitude" value="${pinLat}" />
             <input id="pinLng" type="number" step="any" placeholder="Longitude" value="${pinLng}" />
@@ -131,7 +128,13 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   document.body.appendChild(backdrop);
   const modalEl = backdrop.querySelector(".pin-form-modal");
 
-  const close = () => backdrop.remove();
+  // miniMap is created further down, once MapLibre has loaded — closing
+  // early (e.g. Cancel clicked mid-load) just skips disposing it since
+  // there'd be nothing to dispose yet.
+  const close = () => {
+    miniMap?.remove();
+    backdrop.remove();
+  };
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) close();
   });
@@ -143,32 +146,82 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   // one updates the other.
   const latInput = backdrop.querySelector("#pinLat");
   const lngInput = backdrop.querySelector("#pinLng");
-  await ensureLeaflet();
-  const miniMap = L.map(backdrop.querySelector("#pinLocationMap"), { zoomControl: false }).setView([pinLat, pinLng], 14);
-  L.control.zoom({ position: "bottomright" }).addTo(miniMap);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "" }).addTo(miniMap);
-  let marker = L.marker([pinLat, pinLng], { icon: locationIcon() }).addTo(miniMap);
-  setTimeout(() => miniMap.invalidateSize(), 0);
+  await ensureMapLibre();
+  let miniMapStyleKey = localStorage.getItem(MAP_STYLE_KEY) || "parchment";
+  if (!STYLES[miniMapStyleKey]) miniMapStyleKey = "parchment";
+  const miniMap = new maplibregl.Map({
+    container: backdrop.querySelector("#pinLocationMap"),
+    style: STYLES[miniMapStyleKey],
+    center: [pinLng, pinLat],
+    zoom: 13,
+    attributionControl: { compact: true },
+  });
+  miniMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+  const marker = new maplibregl.Marker({ element: locationMarkerEl(), anchor: "bottom", draggable: true })
+    .setLngLat([pinLng, pinLat])
+    .addTo(miniMap);
 
-  miniMap.on("click", (e) => {
-    pinLat = e.latlng.lat;
-    pinLng = e.latlng.lng;
-    marker.setLatLng(e.latlng);
-    latInput.value = pinLat.toFixed(6);
-    lngInput.value = pinLng.toFixed(6);
+  // Existing pins rendered as clustered context (same look as the main
+  // map) so it's easy to see where your other pins already are while
+  // placing a new one — not clickable here, since clicking the map places
+  // the pin instead.
+  const { data: contextPins } = await supabase.from("pins").select("id, lat, lng").neq("id", editingPin?.id || "");
+  const contextFeatures = (contextPins || []).map((p) => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+    properties: {},
+  }));
+  function addContextPinLayers() {
+    tryAddClusterLayers(miniMap, { sourceId: "pin-form-pins", color: "#8a7f6a", features: contextFeatures });
+  }
+  miniMap.on("styledata", () => {
+    addContextPinLayers();
+    retintParchment(miniMap, miniMapStyleKey);
+  });
+  addContextPinLayers();
+
+  function setMarkerPosition(lat, lng, { flyTo = false } = {}) {
+    pinLat = lat;
+    pinLng = lng;
+    marker.setLngLat([lng, lat]);
+    latInput.value = lat.toFixed(6);
+    lngInput.value = lng.toFixed(6);
+    if (flyTo) miniMap.flyTo({ center: [lng, lat] });
+  }
+
+  miniMap.on("click", (e) => setMarkerPosition(e.lngLat.lat, e.lngLat.lng));
+  marker.on("dragend", () => {
+    const { lat, lng } = marker.getLngLat();
+    setMarkerPosition(lat, lng);
   });
   function syncFromInputs() {
     const lat = parseFloat(latInput.value);
     const lng = parseFloat(lngInput.value);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      pinLat = lat;
-      pinLng = lng;
-      marker.setLatLng([lat, lng]);
-      miniMap.setView([lat, lng]);
-    }
+    if (Number.isFinite(lat) && Number.isFinite(lng)) setMarkerPosition(lat, lng, { flyTo: true });
   }
   latInput.addEventListener("change", syncFromInputs);
   lngInput.addEventListener("change", syncFromInputs);
+
+  // Style switcher — same three styles/preference key as the main map.
+  const miniStyleBtn = backdrop.querySelector("#pinMapStyleBtn");
+  const miniStyleDropdown = backdrop.querySelector("#pinMapStyleDropdown");
+  miniStyleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    miniStyleDropdown.style.display = miniStyleDropdown.style.display === "none" ? "flex" : "none";
+  });
+  document.addEventListener("click", () => {
+    miniStyleDropdown.style.display = "none";
+  });
+  miniStyleDropdown.querySelectorAll("[data-pin-map-style]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      miniStyleDropdown.style.display = "none";
+      const key = btn.dataset.pinMapStyle;
+      if (key === miniMapStyleKey) return;
+      miniMapStyleKey = key;
+      localStorage.setItem(MAP_STYLE_KEY, key);
+      miniMap.setStyle(STYLES[key]);
+    });
+  });
 
   // Easter egg: typing "wowza" as the pin name auto-picks a random category.
   const titleInput = backdrop.querySelector("#pinTitle");

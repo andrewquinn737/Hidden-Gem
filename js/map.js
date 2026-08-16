@@ -4,61 +4,13 @@ import { openPinForm } from "./pinForm.js";
 import { openPinDetail } from "./pinDetailModal.js";
 import { searchPlace } from "./geo.js";
 import { MAP_OUTLINE_SVG } from "./placeholders.js";
+import { STYLES, pinCanvas, retintParchment } from "./mapStyles.js";
 
 const PIN_COLORS = {
   mine: "#b5651d", // accent
   friend: "#2f6fed", // blue
   other: "#2e8b57", // green
 };
-
-const STYLES = {
-  street: "https://tiles.openfreemap.org/styles/liberty",
-  parchment: "https://tiles.openfreemap.org/styles/positron",
-  satellite: {
-    version: 8,
-    sources: {
-      esri: {
-        type: "raster",
-        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-        tileSize: 256,
-        attribution: "Esri, Maxar, Earthstar Geographics",
-      },
-    },
-    layers: [{ id: "esri", type: "raster", source: "esri" }],
-  },
-};
-
-// Draws the same pin-drop shape used elsewhere in the app onto a canvas so
-// it can be registered as a MapLibre image (symbol layers need a raster
-// image, not an arbitrary DOM element, to support native clustering).
-function pinCanvas(color) {
-  const scale = 3;
-  const canvas = document.createElement("canvas");
-  canvas.width = 28 * scale;
-  canvas.height = 40 * scale;
-  const ctx = canvas.getContext("2d");
-  ctx.scale(scale, scale);
-  ctx.beginPath();
-  ctx.moveTo(14, 0);
-  ctx.bezierCurveTo(6.3, 0, 0, 6.3, 0, 14);
-  ctx.bezierCurveTo(0, 24.5, 14, 40, 14, 40);
-  ctx.bezierCurveTo(14, 40, 28, 24.5, 28, 14);
-  ctx.bezierCurveTo(28, 6.3, 21.7, 0, 14, 0);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "#fff";
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(14, 14, 5, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
-  ctx.fill();
-  // addImage on this MapLibre build only accepts ImageData (or a plain
-  // {width,height,data} object) — a raw canvas/HTMLCanvasElement throws a
-  // "mismatched image size" RangeError.
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
-}
 
 const session = await requireSession();
 if (session) {
@@ -85,7 +37,11 @@ if (session) {
     }
   }
 
-  let currentStyleKey = "street";
+  // Parchment is the default look; once someone explicitly picks a
+  // different style it's remembered (across sessions) as their preference.
+  const STYLE_KEY = "hg:mapStyle";
+  let currentStyleKey = localStorage.getItem(STYLE_KEY) || "parchment";
+  if (!STYLES[currentStyleKey]) currentStyleKey = "parchment";
   const map = new maplibregl.Map({
     container: "map",
     style: STYLES[currentStyleKey],
@@ -97,6 +53,20 @@ if (session) {
   });
   map.on("error", (e) => console.error("MapLibre error:", e.error || e));
   map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), "bottom-right");
+
+  // "You are here" blue dot — MapLibre's own GeolocateControl handles the
+  // dot rendering and, with trackUserLocation on, keeps it live-updating
+  // via watchPosition for as long as this map page stays open (once the
+  // user has granted permission once, it re-tracks automatically on every
+  // visit without asking again). Its default button is hidden; the
+  // existing toolbar location button just triggers it instead, so there's
+  // one geolocate control in the UI, not two.
+  const geolocateControl = new maplibregl.GeolocateControl({
+    positionOptions: { enableHighAccuracy: true },
+    trackUserLocation: true,
+    showUserLocation: true,
+  });
+  map.addControl(geolocateControl, "top-left");
 
   map.on("moveend", () => {
     const c = map.getCenter();
@@ -229,17 +199,6 @@ if (session) {
     }
   }
 
-  function retintParchment() {
-    if (currentStyleKey !== "parchment") return;
-    try {
-      map.setPaintProperty("background", "background-color", "#f2e9d8");
-      map.setPaintProperty("water", "fill-color", "#c9bfa0");
-      map.setPaintProperty("landcover_wood", "fill-color", "#ddd2b0");
-    } catch {
-      // layer ids can vary; a missed retint just falls back to the plain style
-    }
-  }
-
   // Neither "load"/"style.load" nor isStyleLoaded() are reliable enough to
   // gate on here — in some environments they never fire/flip true even
   // though the style is genuinely usable moments later. So instead of
@@ -250,7 +209,7 @@ if (session) {
   function trySetupPinLayers(attempt = 0) {
     try {
       setupPinLayers();
-      retintParchment();
+      retintParchment(map, currentStyleKey);
     } catch (err) {
       if (attempt < 30) setTimeout(() => trySetupPinLayers(attempt + 1), 400);
       else console.error("Giving up on map pin layers:", err);
@@ -313,24 +272,23 @@ if (session) {
     return div.innerHTML;
   }
 
+  // pinsById is already populated by the loadPins() call above — no need
+  // to wait on map's "load" event (unreliable in some environments, see
+  // trySetupPinLayers above) just to fly the camera and drop a popup,
+  // neither of which touch the custom pin layers it gates.
   if (focusPinId) {
-    map.once("load", async () => {
-      await loadPins();
-      const pin = pinsById[focusPinId];
-      if (pin) {
-        map.flyTo({ center: [pin.lng, pin.lat], zoom: 15 });
-        openPinPopup(focusPinId, [pin.lng, pin.lat]);
-      }
-    });
+    const pin = pinsById[focusPinId];
+    if (pin) {
+      map.flyTo({ center: [pin.lng, pin.lat], zoom: 15 });
+      openPinPopup(focusPinId, [pin.lng, pin.lat]);
+    }
   }
 
-  // Geolocate
+  // Geolocate — triggers the hidden GeolocateControl above, which both
+  // flies to the user's position and (with trackUserLocation on) starts
+  // the live-updating blue dot.
   document.getElementById("geolocateBtn").addEventListener("click", () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 }),
-      () => alert("Couldn't get your location.")
-    );
+    geolocateControl.trigger();
   });
   if (!focusPinId && !repositionPinId && !restoredView) {
     navigator.geolocation?.getCurrentPosition(
@@ -355,6 +313,7 @@ if (session) {
       const key = btn.dataset.mapStyle;
       if (key === currentStyleKey) return;
       currentStyleKey = key;
+      localStorage.setItem(STYLE_KEY, key);
       map.setStyle(STYLES[key]);
     });
   });
@@ -429,12 +388,9 @@ if (session) {
     banner.style.display = "flex";
     markerOverlay.style.display = "block";
 
-    map.once("load", async () => {
-      await loadPins();
-      const pin = pinsById[repositionPinId];
-      document.getElementById("repositionLabel").textContent = pin ? `Moving "${pin.title}"` : "Move this pin";
-      if (pin) map.flyTo({ center: [pin.lng, pin.lat], zoom: 15 });
-    });
+    const repositionPin = pinsById[repositionPinId];
+    document.getElementById("repositionLabel").textContent = repositionPin ? `Moving "${repositionPin.title}"` : "Move this pin";
+    if (repositionPin) map.flyTo({ center: [repositionPin.lng, repositionPin.lat], zoom: 15 });
 
     document.getElementById("repositionCancelBtn").addEventListener("click", () => {
       window.location.href = "index.html";
