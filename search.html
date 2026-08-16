@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidden Gem — Search</title>
+<script>
+  (function () {
+    var ua = navigator.userAgent || navigator.vendor || "";
+    var isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile/i.test(ua);
+    var isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    document.documentElement.classList.add(isMobileUA || isIpadOS ? "is-mobile-device" : "is-desktop-device");
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="favicon.ico" sizes="any" />
+<link rel="icon" href="favicon.png" type="image/png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#b5651d" />
+</head>
+<body data-page="search.html">
+<div id="topnav"></div>
+<main class="stack">
+  <input id="appSearchInput" placeholder="Search accounts or pins…" autofocus />
+  <div id="appSearchResults" class="stack"></div>
+</main>
+
+<script type="module" src="js/search.js"></script>
+<script type="module" src="js/pwa.js"></script>
+</body>
+</html>

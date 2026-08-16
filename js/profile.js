@@ -3,7 +3,7 @@ import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { openPinDetail, openPinDetailFullscreen } from "./pinDetailModal.js";
 import { setupSheetDrag } from "./sheetDrag.js";
-import { MAP_OUTLINE_SVG, PERSON_OUTLINE_SVG, avatarPlaceholderHtml } from "./placeholders.js";
+import { MAP_OUTLINE_SVG, PERSON_OUTLINE_SVG, avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
 
 const NOTIF_SEEN_KEY = "hg:notifSeenAt";
 
@@ -185,7 +185,7 @@ if (session) {
         </div>
         <div class="friends-body stack">
           <input id="friendFilterInput" class="popup-search-input" placeholder="Search your friends" />
-          <div id="currentFriendsList" class="stack"><p class="muted">Loading…</p></div>
+          <div id="currentFriendsList" class="stack">${skeletonListHtml(4, { avatar: true })}</div>
         </div>
       </div>
     `;

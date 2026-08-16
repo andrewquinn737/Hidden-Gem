@@ -9,10 +9,11 @@
   --danger: #c0392b;
   --success: #2e8b57;
   --radius: 12px;
-  --tabbar-bg: rgba(34, 26, 16, 0.8);
-  --tabbar-icon: rgba(255, 255, 255, 0.75);
-  --tabbar-active-icon: #ffffff;
-  --tabbar-active-bg: rgba(255, 255, 255, 0.16);
+  --tabbar-bg: rgba(255, 255, 255, 0.72);
+  --tabbar-icon: rgba(34, 26, 16, 0.6);
+  --tabbar-active-icon: #221a10;
+  --tabbar-active-bg: rgba(34, 26, 16, 0.08);
+  --menu-bg: rgba(255, 255, 255, 0.85);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +28,10 @@
     --danger: #e0685a;
     --success: #4cbd80;
     --tabbar-bg: rgba(0, 0, 0, 0.8);
+    --tabbar-icon: rgba(255, 255, 255, 0.75);
+    --tabbar-active-icon: #ffffff;
+    --tabbar-active-bg: rgba(255, 255, 255, 0.16);
+    --menu-bg: rgba(31, 26, 18, 0.85);
   }
 }
 
@@ -145,6 +150,25 @@ main {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   z-index: 50;
 }
+/* 3-dot / style / view-mode dropdown menus — semi-transparent instead of
+   solid, and a quick scale+fade pop on open (a slight overshoot past 1,
+   then settling) instead of just appearing, matching the snappy way
+   native iOS/Android context menus open. Pure display:none->flex toggles
+   (how these are shown, in js) restart a CSS animation each time, so no
+   extra open/close class bookkeeping is needed. */
+.dropdown-menu {
+  background: var(--menu-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transform-origin: top right;
+  animation: dropdown-open 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+#viewModeDropdown.dropdown-menu { transform-origin: top left; }
+@keyframes dropdown-open {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .bottom-tabbar .tab {
   display: flex;
   flex-direction: column;
@@ -158,9 +182,6 @@ main {
 .bottom-tabbar .tab svg { width: 22px; height: 22px; }
 .bottom-tabbar .tab.active { color: var(--tabbar-active-icon); background: var(--tabbar-active-bg); }
 .bottom-tabbar button.tab { background: none; border: none; font-family: inherit; font-size: 0.7rem; line-height: normal; }
-
-.topnav-search-btn { font: inherit; background: none; border: none; padding: 0; color: var(--text-muted); cursor: pointer; }
-.topnav-search-btn:hover { color: var(--accent-hover); }
 
 /* ============================================================
    App-wide search (js/search.js)
@@ -337,7 +358,14 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
   padding: 0.7rem 0; color: var(--text);
 }
 
-html.is-mobile-device .hide-title-mobile { display: none; }
+/* visibility:hidden, not display:none — a display:none grid item is
+   removed from the grid's item list entirely, which silently shifts the
+   other two header children (drag handle, close button) back into the
+   wrong tracks via auto-placement and knocks the drag handle off-center.
+   visibility:hidden keeps it "in" the grid (occupying its track) while
+   painting nothing; minmax(0,1fr) keeps its hidden text from forcing
+   that track wider than its fair share. */
+html.is-mobile-device .hide-title-mobile { visibility: hidden; }
 
 .add-pin-tile {
   display: flex;
@@ -484,7 +512,11 @@ html.is-mobile-device .hide-title-mobile { display: none; }
    wins) and defeats sticky positioning in .modal-full (sticky needs the
    scrolling ancestor itself, not a clipped non-scrolling wrapper) — both
    contexts reuse .post-card on the same element, so override explicitly. */
-.pin-detail-modal.post-card { overflow-x: hidden; overflow-y: auto; }
+/* No border — a popup isn't a card sitting in a list of other cards
+   (that's what .post-card's border is for, e.g. the Discover feed), and
+   with the photo spanning the popup's full width, that 1px border read
+   as a stray white/light line hugging the image's edges. */
+.pin-detail-modal.post-card { overflow-x: hidden; overflow-y: auto; border: none; }
 .modal-full.post-card { overflow: visible; }
 .post-header {
   display: grid;
@@ -504,7 +536,8 @@ html.is-mobile-device .hide-title-mobile { display: none; }
 .post-header.post-header-stacked {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  align-items: stretch;
+  gap: 0.4rem;
 }
 .post-header-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
 .post-title-block { flex: 1; min-width: 0; margin-top: -0.15rem; }
@@ -571,6 +604,11 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 }
 .skeleton-photo { width: 100%; aspect-ratio: 4/5; border-radius: 0; }
 .skeleton-icon { width: 23px; height: 23px; border-radius: 50%; }
+/* Generic list-row skeleton (js/placeholders.js skeletonListHtml) — same
+   shimmer, used anywhere a plain list is loading (friends, comments,
+   upcoming visits) instead of "Loading…" text. */
+.skeleton-row { padding: 0.4rem 0; gap: 0.6rem; align-items: center; }
+.skeleton-row-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; }
 @keyframes skeleton-shimmer {
   0% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
@@ -580,9 +618,13 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
 .post-owner-name { padding: 0; font-weight: 700; color: var(--text); vertical-align: middle; margin-right: 0.35rem; }
 .post-caption-text { vertical-align: middle; }
-.post-directions-text { display: block; margin-top: 0.4rem; font-style: italic; }
+/* Stays inline (not display:block) — a block child inside a
+   -webkit-line-clamp box corrupts its line counting, which silently
+   broke both the 3-line truncation and the "see more" button. The line
+   break comes from the literal <br/> in the markup instead. */
+.post-directions-text { font-style: italic; }
 .post-caption.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: inherit; cursor: pointer; }
+.post-showmore-btn { display: block; margin: 0.3rem 0 0; background: none; border: none; padding: 0; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; cursor: pointer; }
 
 /* ============================================================
    Comments popup (js/postCard.js openCommentsPopup) — reuses the

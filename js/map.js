@@ -290,11 +290,19 @@ if (session) {
   document.getElementById("geolocateBtn").addEventListener("click", () => {
     geolocateControl.trigger();
   });
+  // If location permission is already granted (a returning user), show the
+  // blue dot right away instead of waiting for a manual tap on the 📍
+  // button — matching Google/Apple Maps. First-time visitors still only
+  // get the permission prompt when they actually ask for it.
   if (!focusPinId && !repositionPinId && !restoredView) {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 12 }),
-      () => {} // silently fall back to world view
-    );
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: "geolocation" })
+        .then((status) => {
+          if (status.state === "granted") geolocateControl.trigger();
+        })
+        .catch(() => {});
+    }
   }
 
   // Style switcher — street / satellite / parchment

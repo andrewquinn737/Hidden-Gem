@@ -96,14 +96,6 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
           <label class="field-label">Location</label>
           <div style="position:relative; height:240px; border-radius: var(--radius); overflow:hidden;">
             <div id="pinLocationMap" style="height:100%;"></div>
-            <div style="position:absolute; top:0.5rem; right:0.5rem; z-index:1;">
-              <button type="button" id="pinMapStyleBtn" class="btn" style="padding:0.35rem 0.5rem;">🗺️</button>
-              <div id="pinMapStyleDropdown" class="card stack" style="display:none; position:absolute; right:0; top:110%; z-index:1; min-width:120px; padding:0.4rem; gap:0.25rem;">
-                <button type="button" class="btn" data-pin-map-style="street" style="width:100%; text-align:left; border:none;">Street</button>
-                <button type="button" class="btn" data-pin-map-style="satellite" style="width:100%; text-align:left; border:none;">Satellite</button>
-                <button type="button" class="btn" data-pin-map-style="parchment" style="width:100%; text-align:left; border:none;">Parchment</button>
-              </div>
-            </div>
           </div>
           <div class="row" style="margin-top:0.5rem;">
             <input id="pinLat" type="number" step="any" placeholder="Latitude" value="${pinLat}" />
@@ -147,7 +139,9 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   const latInput = backdrop.querySelector("#pinLat");
   const lngInput = backdrop.querySelector("#pinLng");
   await ensureMapLibre();
-  let miniMapStyleKey = localStorage.getItem(MAP_STYLE_KEY) || "parchment";
+  // Uses whatever style is currently selected on the main map — no
+  // separate switcher here, so there's only ever one "current" style.
+  let miniMapStyleKey = localStorage.getItem(MAP_STYLE_KEY);
   if (!STYLES[miniMapStyleKey]) miniMapStyleKey = "parchment";
   const miniMap = new maplibregl.Map({
     container: backdrop.querySelector("#pinLocationMap"),
@@ -201,27 +195,6 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   }
   latInput.addEventListener("change", syncFromInputs);
   lngInput.addEventListener("change", syncFromInputs);
-
-  // Style switcher — same three styles/preference key as the main map.
-  const miniStyleBtn = backdrop.querySelector("#pinMapStyleBtn");
-  const miniStyleDropdown = backdrop.querySelector("#pinMapStyleDropdown");
-  miniStyleBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    miniStyleDropdown.style.display = miniStyleDropdown.style.display === "none" ? "flex" : "none";
-  });
-  document.addEventListener("click", () => {
-    miniStyleDropdown.style.display = "none";
-  });
-  miniStyleDropdown.querySelectorAll("[data-pin-map-style]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      miniStyleDropdown.style.display = "none";
-      const key = btn.dataset.pinMapStyle;
-      if (key === miniMapStyleKey) return;
-      miniMapStyleKey = key;
-      localStorage.setItem(MAP_STYLE_KEY, key);
-      miniMap.setStyle(STYLES[key]);
-    });
-  });
 
   // Easter egg: typing "wowza" as the pin name auto-picks a random category.
   const titleInput = backdrop.querySelector("#pinTitle");

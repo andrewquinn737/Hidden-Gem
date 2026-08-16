@@ -2,6 +2,7 @@ import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinDetail } from "./pinDetailModal.js";
 import { setupSheetDrag } from "./sheetDrag.js";
+import { skeletonListHtml } from "./placeholders.js";
 
 const session = await requireSession();
 if (session) {
@@ -447,7 +448,7 @@ if (session) {
   async function renderUpcoming() {
     const el = document.getElementById("upcomingView");
     el.style.display = "flex";
-    el.innerHTML = '<p class="muted">Loading…</p>';
+    el.innerHTML = skeletonListHtml(4);
 
     const { data: visits, error } = await supabase
       .from("visits")

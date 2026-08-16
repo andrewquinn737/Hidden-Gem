@@ -8,3 +8,20 @@ export const MAP_OUTLINE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="cur
 export function avatarPlaceholderHtml(className = "avatar", style = "") {
   return `<span class="${className} avatar-placeholder" style="${style}">${PERSON_OUTLINE_SVG}</span>`;
 }
+
+// Shimmering row placeholders for any plain list (friends, comments,
+// upcoming visits) — same .skeleton-bar shimmer as postCardSkeleton
+// (js/postCard.js), just arranged as simple rows instead of a full card,
+// so every loading state in the app reads as one consistent system
+// instead of a mix of skeletons and "Loading…" text.
+export function skeletonListHtml(rows = 4, { avatar = false } = {}) {
+  return Array.from({ length: rows }, () => `
+    <div class="row skeleton-row">
+      ${avatar ? '<span class="skeleton-bar skeleton-row-avatar"></span>' : ""}
+      <div class="stack" style="flex:1; gap:0.35rem;">
+        <span class="skeleton-bar" style="width:${avatar ? "45%" : "30%"}; height:0.8rem;"></span>
+        ${avatar ? "" : '<span class="skeleton-bar" style="width:75%; height:0.75rem;"></span>'}
+      </div>
+    </div>
+  `).join("");
+}

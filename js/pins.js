@@ -8,7 +8,7 @@ if (session) {
 
   async function loadFeed() {
     const feedEl = document.getElementById("feed");
-    feedEl.innerHTML = '<p class="muted">Loading…</p>';
+    feedEl.innerHTML = `<article class="post-card">${postCardSkeleton()}</article><article class="post-card">${postCardSkeleton()}</article>`;
 
     // No filters here on purpose — RLS already returns exactly what this
     // user is allowed to see: their own pins, friends' pins, and public

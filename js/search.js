@@ -1,47 +1,71 @@
+import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinDetailFullscreen } from "./pinDetailModal.js";
-import { avatarPlaceholderHtml } from "./placeholders.js";
+import { avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
 
-// App-wide search — full-screen popup, searches accounts and public pins
-// together. Triggered from the nav (see js/auth.js), available on every
-// page since auth.js is loaded everywhere.
-export function openSearchModal() {
-  const backdrop = document.createElement("div");
-  backdrop.className = "modal-backdrop-full search-modal-backdrop";
-  backdrop.innerHTML = `
-    <div class="modal-full stack">
-      <div class="row" style="gap:0.5rem;">
-        <input id="appSearchInput" placeholder="Search accounts or pins…" autofocus />
-        <button id="appSearchClose" class="btn-link" style="font-size:1.4rem; padding:0.2rem 0.5rem;">✕</button>
-      </div>
-      <div id="appSearchResults" class="stack"></div>
-    </div>
-  `;
-  document.body.appendChild(backdrop);
-  const close = () => backdrop.remove();
-  backdrop.querySelector("#appSearchClose").addEventListener("click", close);
+const RESULT_LIMIT = 7;
+const RECENT_KEY = "hg:recentSearches";
+const RECENT_MAX = 6;
 
-  const input = backdrop.querySelector("#appSearchInput");
-  const resultsEl = backdrop.querySelector("#appSearchResults");
+function loadRecent() {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+function saveRecent(query) {
+  const q = query.trim();
+  if (!q) return;
+  const existing = loadRecent().filter((r) => r.toLowerCase() !== q.toLowerCase());
+  existing.unshift(q);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(existing.slice(0, RECENT_MAX)));
+}
+
+const session = await requireSession();
+if (session) {
+  const input = document.getElementById("appSearchInput");
+  const resultsEl = document.getElementById("appSearchResults");
   input.focus();
+
+  renderRecent();
 
   let debounceTimer = null;
   input.addEventListener("input", () => {
     clearTimeout(debounceTimer);
     const q = input.value.trim();
     if (!q) {
-      resultsEl.innerHTML = "";
+      renderRecent();
       return;
     }
     debounceTimer = setTimeout(() => runSearch(q), 250);
   });
 
+  function renderRecent() {
+    const recent = loadRecent();
+    if (!recent.length) {
+      resultsEl.innerHTML = "";
+      return;
+    }
+    resultsEl.innerHTML = `
+      <h3 style="margin:0.5rem 0 0;">Recent searches</h3>
+      ${recent.map((q) => `<button type="button" class="search-result-row recent-search-row">${escapeHtml(q)}</button>`).join("")}
+    `;
+    resultsEl.querySelectorAll(".recent-search-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        input.value = row.textContent;
+        runSearch(row.textContent);
+      });
+    });
+  }
+
   async function runSearch(q) {
-    resultsEl.innerHTML = '<p class="muted">Searching…</p>';
+    resultsEl.innerHTML = skeletonListHtml(4, { avatar: true });
     const [{ data: profiles }, { data: pins }] = await Promise.all([
-      supabase.from("profiles").select("id, username, avatar_url").ilike("username", `%${q}%`).limit(10),
-      supabase.from("pins").select("id, title, category").eq("visibility", "public").ilike("title", `%${q}%`).limit(10),
+      supabase.from("profiles").select("id, username, avatar_url").ilike("username", `%${q}%`).limit(RESULT_LIMIT),
+      supabase.from("pins").select("id, title, category").eq("visibility", "public").ilike("title", `%${q}%`).limit(RESULT_LIMIT),
     ]);
+    saveRecent(q);
 
     if (!profiles?.length && !pins?.length) {
       resultsEl.innerHTML = '<p class="muted">No matches.</p>';
@@ -88,7 +112,6 @@ export function openSearchModal() {
         row.className = "search-result-row";
         row.innerHTML = `<span>${escapeHtml(pin.title)}</span>${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}`;
         row.addEventListener("click", () => {
-          close();
           openPinDetailFullscreen(pin.id, {});
         });
         resultsEl.appendChild(row);

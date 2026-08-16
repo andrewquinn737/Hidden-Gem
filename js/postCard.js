@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { setupSheetDrag } from "./sheetDrag.js";
-import { MAP_OUTLINE_SVG, avatarPlaceholderHtml } from "./placeholders.js";
+import { MAP_OUTLINE_SVG, avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
 import { reverseGeocodeLabel } from "./geoReverse.js";
 
 const PIN_SELECT =
@@ -90,13 +90,14 @@ export async function renderPostCard(pin, container, options = {}) {
   card.classList.add("post-card");
 
   // Description flows right after the name; directions gets its own line
-  // below, but both still count toward the same 3-line clamp. A fullscreen
-  // popup (startFull — reached from Profile, search, etc.) has plenty of
-  // room for the whole thing, so only clamp in the more cramped feed/
-  // half-screen contexts.
+  // below (a <br/>, not display:block — a block child breaks WebKit's
+  // line-clamp box model and silently corrupts the truncation), and both
+  // count toward the same 3-line clamp. A fullscreen popup (startFull —
+  // reached from Profile, search, etc.) has plenty of room for the whole
+  // thing, so only clamp in the more cramped feed/half-screen contexts.
   const descriptionText = pin.description || "";
   const directionsText = pin.directions ? `How to get there: ${pin.directions}` : "";
-  const captionLong = !startFull && descriptionText.length + directionsText.length > 140;
+  const mayClamp = !startFull && (descriptionText || directionsText);
 
   card.innerHTML = `
     <div class="post-header post-header-stacked">
@@ -112,7 +113,7 @@ export async function renderPostCard(pin, container, options = {}) {
           ${pin.category ? `<span class="pill">${escapeHtml(pin.category)}</span>` : ""}
           <div class="post-menu-wrap" style="position:relative;">
             <button class="post-menu-btn" aria-label="Post menu">⋯</button>
-            <div class="post-menu-dropdown card stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:160px; padding:0.4rem; gap:0.25rem;">
+            <div class="post-menu-dropdown card dropdown-menu stack" style="display:none; position:absolute; right:0; top:110%; z-index:30; min-width:160px; padding:0.4rem; gap:0.25rem;">
               <button class="btn post-schedule-btn" style="width:100%; text-align:left; border:none;">Schedule visit</button>
               ${
                 ownerMenuEnabled && isOwner
@@ -140,7 +141,8 @@ export async function renderPostCard(pin, container, options = {}) {
     </div>
 
     <div class="post-body">
-      <p class="post-caption ${captionLong ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile">${ownerAvatarUrl ? `<img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" />` : avatarPlaceholderHtml("avatar post-owner-avatar")}</button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}${captionLong ? ' <button class="post-showmore-btn">see more</button>' : ""}</p>
+      <p class="post-caption ${mayClamp ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile">${ownerAvatarUrl ? `<img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" />` : avatarPlaceholderHtml("avatar post-owner-avatar")}</button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<br /><span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}</p>
+      ${mayClamp ? '<button class="post-showmore-btn">see more</button>' : ""}
     </div>
   `;
 
@@ -313,16 +315,27 @@ export async function renderPostCard(pin, container, options = {}) {
     });
   });
 
-  // "more"/"less" — sits inline at the end of the caption text itself
-  // (Instagram-style), so it reads as part of the last visible line
-  // instead of a separate row.
-  card.querySelector(".post-showmore-btn")?.addEventListener("click", (e) => {
-    const btn = e.currentTarget;
-    const captionEl = card.querySelector(".post-caption");
-    const expanding = captionEl.classList.contains("clamped");
-    captionEl.classList.toggle("clamped", !expanding);
-    btn.textContent = expanding ? "less" : "more";
-  });
+  // Caption is clamped to 3 lines by default; the "see more"/"see less"
+  // button only shows up if the text genuinely overflows that (measured
+  // directly — scrollHeight vs clientHeight — rather than guessed from a
+  // character count, which breaks the moment font size or card width
+  // changes). Sits right under the caption instead of trailing inline
+  // inside it, since a WebKit line-clamp box can't reliably fit trailing
+  // content at its cutoff point anyway.
+  const showMoreBtn = card.querySelector(".post-showmore-btn");
+  const captionEl = card.querySelector(".post-caption");
+  if (showMoreBtn && captionEl) {
+    requestAnimationFrame(() => {
+      if (captionEl.scrollHeight <= captionEl.clientHeight + 1) {
+        showMoreBtn.remove();
+      }
+    });
+    showMoreBtn.addEventListener("click", () => {
+      const expanding = captionEl.classList.contains("clamped");
+      captionEl.classList.toggle("clamped", !expanding);
+      showMoreBtn.textContent = expanding ? "see less" : "see more";
+    });
+  }
 
   return card;
 }
@@ -341,7 +354,7 @@ async function openCommentsPopup(pin, currentUserId, onCountChange) {
         <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
       </div>
       <div class="comments-body stack">
-        <div class="comments-list stack"><p class="muted">Loading…</p></div>
+        <div class="comments-list stack">${skeletonListHtml(3)}</div>
       </div>
       <form class="post-comment-form row">
         <input class="post-comment-input" placeholder="Add a comment…" required />

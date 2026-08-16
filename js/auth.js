@@ -12,8 +12,7 @@ const NAV_ITEMS = [
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.4-7-11.5A7 7 0 0 1 19 9.5C19 14.6 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
   },
   {
-    type: "button",
-    id: "searchNavBtn",
+    href: "search.html",
     label: "Search",
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
   },
@@ -60,16 +59,12 @@ export function renderNav() {
   if (!mount) return;
   const page = document.body.dataset.page || "";
 
-  const desktopLinks = NAV_ITEMS.map((item) =>
-    item.type === "button"
-      ? `<button id="${item.id}-desktop" class="btn-link topnav-search-btn">${item.label}</button>`
-      : `<a href="${item.href}" class="${page === item.href ? "active" : ""}">${item.label}</a>`
+  const desktopLinks = NAV_ITEMS.map(
+    (item) => `<a href="${item.href}" class="${page === item.href ? "active" : ""}">${item.label}</a>`
   ).join("");
 
-  const mobileLinks = NAV_ITEMS.map((item) =>
-    item.type === "button"
-      ? `<button id="${item.id}" class="tab">${item.icon}<span>${item.label}</span></button>`
-      : `<a href="${item.href}" class="tab ${page === item.href ? "active" : ""}">${item.icon}<span>${item.label}</span></a>`
+  const mobileLinks = NAV_ITEMS.map(
+    (item) => `<a href="${item.href}" class="tab ${page === item.href ? "active" : ""}">${item.icon}<span>${item.label}</span></a>`
   ).join("");
 
   mount.innerHTML = `
@@ -82,10 +77,6 @@ export function renderNav() {
   `;
 
   document.getElementById("signOutBtn")?.addEventListener("click", signOut);
-
-  const openSearch = () => import("./search.js").then((m) => m.openSearchModal());
-  document.getElementById("searchNavBtn-desktop")?.addEventListener("click", openSearch);
-  document.getElementById("searchNavBtn")?.addEventListener("click", openSearch);
 }
 
 export async function signOut() {
