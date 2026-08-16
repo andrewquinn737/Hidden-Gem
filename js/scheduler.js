@@ -78,7 +78,7 @@ if (session) {
     await renderDayView();
   }
 
-  async function renderDayView() {
+  async function renderDayView(preserveScroll = false) {
     document.getElementById("dayNavLabel").textContent = currentDate.toLocaleDateString(undefined, {
       weekday: "long",
       month: "short",
@@ -90,6 +90,7 @@ if (session) {
     visitsCache = await fetchVisits(dayStart, dayEnd);
 
     const grid = document.getElementById("dayView");
+    const savedScrollTop = preserveScroll ? grid.scrollTop : null;
     grid.innerHTML = "";
     for (let h = 0; h < 24; h++) {
       const row = document.createElement("div");
@@ -108,6 +109,11 @@ if (session) {
     if (draftEvent) {
       const slot = grid.querySelector(`.cal-hour-slot[data-hour="${draftEvent.hour}"]`);
       slot?.appendChild(renderDraftChip());
+    }
+
+    if (savedScrollTop != null) {
+      grid.scrollTop = savedScrollTop;
+      return;
     }
 
     // Scroll to something useful: current hour if viewing today, else the
@@ -173,11 +179,12 @@ if (session) {
         const targetSlot = dropEl?.closest(".cal-hour-slot");
         if (targetSlot) {
           const newHour = Number(targetSlot.dataset.hour);
-          if (newHour !== d.getHours()) {
+          const newMinute = quarterHourFromPointer(targetSlot, e.clientY);
+          if (newHour !== d.getHours() || newMinute !== d.getMinutes()) {
             const updated = new Date(d);
-            updated.setHours(newHour);
+            updated.setHours(newHour, newMinute);
             await supabase.from("visits").update({ scheduled_at: updated.toISOString() }).eq("id", visit.id);
-            await renderDayView();
+            await renderDayView(true);
           }
         }
       };
@@ -241,13 +248,19 @@ if (session) {
 
       if (e.target.closest(".calendar-event")) return;
       const slot = e.target.closest(".cal-hour-slot");
-      pointerStart = { x: e.clientX, y: e.clientY, time: Date.now(), hour: slot ? Number(slot.dataset.hour) : null };
+      pointerStart = {
+        x: e.clientX,
+        y: e.clientY,
+        time: Date.now(),
+        hour: slot ? Number(slot.dataset.hour) : null,
+        minute: slot ? quarterHourFromPointer(slot, e.clientY) : 0,
+      };
       longPressFired = false;
       longPressTimer = setTimeout(async () => {
         if (pointerStart && pointerStart.hour != null) {
           longPressFired = true;
-          draftEvent = { pinId: null, pinTitle: null, hour: pointerStart.hour, minute: 0 };
-          await renderDayView();
+          draftEvent = { pinId: null, pinTitle: null, hour: pointerStart.hour, minute: pointerStart.minute };
+          await renderDayView(true);
           openConfirmDraftModal();
         }
       }, 500);
@@ -460,9 +473,6 @@ if (session) {
 
     document.getElementById("connectGoogleBtn").addEventListener("click", () => {
       alert("Google Calendar sync isn't connected yet — it needs a Google API credential first.");
-    });
-    document.getElementById("connectAppleBtn").addEventListener("click", () => {
-      alert("Apple Calendar sync isn't wired up yet. It'll ask for an iCloud app-specific password once the CalDAV integration is built.");
     });
   }
 
@@ -768,6 +778,15 @@ if (session) {
   function isSameDay(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
+  // Rounds a pointer's vertical position within an hour slot down to the
+  // nearest 15-minute mark, so long-press-create and drag-to-reschedule
+  // both land on quarter/half-hour increments instead of always :00.
+  function quarterHourFromPointer(slotEl, clientY) {
+    const rect = slotEl.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    return Math.min(45, Math.floor(frac * 4) * 15);
+  }
+
   function formatHourMinute(hour, minute) {
     const period = hour < 12 ? "AM" : "PM";
     const hour12 = hour % 12 === 0 ? 12 : hour % 12;

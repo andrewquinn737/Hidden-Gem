@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 import { openPinDetailFullscreen } from "./pinDetailModal.js";
+import { avatarPlaceholderHtml } from "./placeholders.js";
 
 // App-wide search — full-screen popup, searches accounts and public pins
 // together. Triggered from the nav (see js/auth.js), available on every
@@ -56,7 +57,7 @@ export function openSearchModal() {
       for (const p of profiles) {
         const row = document.createElement("button");
         row.className = "search-result-row";
-        row.innerHTML = `<img class="avatar" style="width:32px; height:32px;" src="icons/icon-192.png" /><span>${escapeHtml(p.username)}</span>`;
+        row.innerHTML = `${avatarPlaceholderHtml("avatar", "width:32px; height:32px;")}<span>${escapeHtml(p.username)}</span>`;
         row.addEventListener("click", () => {
           window.location.href = `profile.html?id=${p.id}`;
         });
@@ -66,7 +67,13 @@ export function openSearchModal() {
             .from("media")
             .createSignedUrl(p.avatar_url, 3600)
             .then(({ data }) => {
-              if (data?.signedUrl) row.querySelector(".avatar").src = data.signedUrl;
+              if (!data?.signedUrl) return;
+              const placeholder = row.querySelector(".avatar-placeholder");
+              const img = document.createElement("img");
+              img.className = "avatar";
+              img.style.cssText = "width:32px; height:32px;";
+              img.src = data.signedUrl;
+              placeholder.replaceWith(img);
             });
         }
       }

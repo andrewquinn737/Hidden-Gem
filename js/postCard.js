@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { setupSheetDrag } from "./sheetDrag.js";
+import { MAP_OUTLINE_SVG, avatarPlaceholderHtml } from "./placeholders.js";
 
 const PIN_SELECT =
   "id, title, description, directions, category, owner_id, lat, lng, pin_photos(storage_path, created_at), pin_likes(user_id), pin_saves(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)";
@@ -9,6 +10,32 @@ export async function fetchPin(pinId) {
   const { data, error } = await supabase.from("pins").select(PIN_SELECT).eq("id", pinId).single();
   if (error) return null;
   return data;
+}
+
+// Shimmering placeholder matching a post card's shape, shown wherever a
+// card's container sits empty while renderPostCard's signed-URL fetches are
+// in flight — renderPostCard's own innerHTML assignment replaces it once
+// the real content is ready, so callers never need to clear it themselves.
+export function postCardSkeleton() {
+  return `
+    <div class="post-skeleton">
+      <div class="post-header">
+        <span class="skeleton-bar" style="width:45%; height:0.95rem;"></span>
+        <div class="post-header-center"><span class="post-drag-handle" aria-hidden="true"></span></div>
+        <div class="post-header-end"></div>
+      </div>
+      <div class="skeleton-bar skeleton-photo"></div>
+      <div class="post-actions">
+        <span class="skeleton-bar skeleton-icon"></span>
+        <span class="skeleton-bar skeleton-icon"></span>
+        <span class="skeleton-bar skeleton-icon"></span>
+      </div>
+      <div class="post-body stack" style="gap:0.5rem;">
+        <span class="skeleton-bar" style="width:55%; height:0.8rem;"></span>
+        <span class="skeleton-bar" style="width:85%; height:0.8rem;"></span>
+      </div>
+    </div>
+  `;
 }
 
 // Simple outline/filled icon set for the actions row — black (white in dark
@@ -52,7 +79,7 @@ export async function renderPostCard(pin, container, options = {}) {
     photoUrls = (signed || []).map((s) => s.signedUrl).filter(Boolean);
   }
 
-  let ownerAvatarUrl = "icons/icon-192.png";
+  let ownerAvatarUrl = null;
   if (pin.profiles?.avatar_url) {
     const { data } = await supabase.storage.from("media").createSignedUrl(pin.profiles.avatar_url, 3600);
     if (data?.signedUrl) ownerAvatarUrl = data.signedUrl;
@@ -81,7 +108,7 @@ export async function renderPostCard(pin, container, options = {}) {
             <button class="btn post-schedule-btn" style="width:100%; text-align:left; border:none;">Schedule visit</button>
             ${
               ownerMenuEnabled && isOwner
-                ? '<button class="btn post-edit-btn" style="width:100%; text-align:left; border:none;">Edit</button><button class="btn btn-danger post-delete-btn" style="width:100%; text-align:left; border:none;">Delete</button>'
+                ? '<button class="btn post-share-btn" style="width:100%; text-align:left; border:none;">Share</button><button class="btn post-edit-btn" style="width:100%; text-align:left; border:none;">Edit</button><button class="btn btn-danger post-delete-btn" style="width:100%; text-align:left; border:none;">Delete</button>'
                 : ""
             }
           </div>
@@ -93,7 +120,7 @@ export async function renderPostCard(pin, container, options = {}) {
     ${
       photoUrls.length
         ? `<div class="post-carousel">${photoUrls.map((u) => `<img src="${u}" alt="${escapeAttr(pin.title)}" draggable="false" />`).join("")}</div>`
-        : `<div class="feed-post-photo-placeholder">🗺️</div>`
+        : `<div class="feed-post-photo-placeholder">${MAP_OUTLINE_SVG}</div>`
     }
     <div class="post-actions">
       <button class="post-like-btn icon-btn ${iLiked ? "active" : ""}" aria-label="Like">${ICONS.like(iLiked)}<span class="post-count">${likeCount}</span></button>
@@ -104,7 +131,7 @@ export async function renderPostCard(pin, container, options = {}) {
     </div>
 
     <div class="post-body">
-      <p class="post-caption ${captionLong ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile"><img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" /></button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<br /><span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}${captionLong ? ' <button class="post-showmore-btn">more</button>' : ""}</p>
+      <p class="post-caption ${captionLong ? "clamped" : ""}"><button class="post-owner-avatar-btn" aria-label="View profile">${ownerAvatarUrl ? `<img class="avatar post-owner-avatar" src="${ownerAvatarUrl}" />` : avatarPlaceholderHtml("avatar post-owner-avatar")}</button><button class="btn-link post-owner-name">${escapeHtml(ownerName)}</button><span class="post-caption-text">${escapeHtml(descriptionText)}</span>${directionsText ? `<span class="post-directions-text">${escapeHtml(directionsText)}</span>` : ""}${captionLong ? ' <button class="post-showmore-btn">more</button>' : ""}</p>
     </div>
   `;
 
@@ -165,6 +192,43 @@ export async function renderPostCard(pin, container, options = {}) {
   card.querySelector(".post-schedule-btn").addEventListener("click", () => {
     menuDropdown.style.display = "none";
     window.location.href = `scheduler.html?pinId=${pin.id}`;
+  });
+  card.querySelector(".post-share-btn")?.addEventListener("click", async () => {
+    menuDropdown.style.display = "none";
+    const { data: existing } = await supabase
+      .from("pin_invites")
+      .select("token")
+      .eq("pin_id", pin.id)
+      .eq("inviter_id", currentUserId)
+      .is("invitee_user_id", null)
+      .is("invitee_email", null)
+      .is("invitee_phone", null)
+      .limit(1)
+      .maybeSingle();
+
+    let token = existing?.token;
+    if (!token) {
+      const { data: created, error } = await supabase
+        .from("pin_invites")
+        .insert({ pin_id: pin.id, inviter_id: currentUserId })
+        .select("token")
+        .single();
+      if (error) return alert(error.message);
+      token = created.token;
+    }
+
+    const url = `${window.location.origin}/invite.html?token=${token}`;
+    const shareData = { title: "Hidden Gem — Pin", text: `Check out ${pin.title}!`, url };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch {
+        // user cancelled the share sheet
+      }
+    } else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(url);
+      alert("Link copied to clipboard.");
+    }
   });
   card.querySelector(".post-edit-btn")?.addEventListener("click", () => {
     menuDropdown.style.display = "none";

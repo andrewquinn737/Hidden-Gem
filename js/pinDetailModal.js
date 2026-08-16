@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient.js";
-import { fetchPin, renderPostCard } from "./postCard.js";
+import { fetchPin, renderPostCard, postCardSkeleton } from "./postCard.js";
 
 // Half-screen popup (default 50vh, drag handle to expand to fullscreen or
 // dismiss) — used everywhere a pin gets viewed in a modal. Pass
@@ -12,7 +12,7 @@ export async function openPinDetail(pinId, { onChange, startFull = false } = {})
 
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
-  backdrop.innerHTML = `<div class="modal pin-detail-modal"><p class="muted">Loading…</p></div>`;
+  backdrop.innerHTML = `<div class="modal pin-detail-modal">${postCardSkeleton()}</div>`;
   document.body.appendChild(backdrop);
   const contentEl = backdrop.querySelector(".pin-detail-modal");
 
@@ -28,7 +28,6 @@ export async function openPinDetail(pinId, { onChange, startFull = false } = {})
     return;
   }
 
-  contentEl.innerHTML = "";
   await renderPostCard(pin, contentEl, {
     currentUserId: user.id,
     onChange,

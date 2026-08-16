@@ -1,6 +1,6 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
-import { renderPostCard } from "./postCard.js";
+import { renderPostCard, postCardSkeleton } from "./postCard.js";
 
 const session = await requireSession();
 if (session) {
@@ -32,6 +32,8 @@ if (session) {
     feedEl.innerHTML = "";
     const slots = pins.map(() => {
       const el = document.createElement("article");
+      el.className = "post-card";
+      el.innerHTML = postCardSkeleton();
       feedEl.appendChild(el);
       return el;
     });

@@ -128,7 +128,7 @@ main {
 .bottom-tabbar {
   display: none;
   position: fixed;
-  bottom: calc(0.35rem + env(safe-area-inset-bottom));
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
   left: 0.75rem;
   right: 0.75rem;
   background: var(--tabbar-bg);
@@ -212,7 +212,10 @@ html.is-mobile-device #map { height: 100vh; }
   background: var(--surface);
   box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 }
-.hg-popup .maplibregl-popup-tip { display: none; }
+/* Kept visible (and, since the popup is always anchor:"bottom" — see
+   openPinPopup — always the bottom tip) so it points straight down at the
+   pin it belongs to instead of floating ambiguously above it. */
+.hg-popup .maplibregl-popup-tip { border-top-color: var(--surface) !important; }
 
 .modal-backdrop {
   position: fixed; inset: 0;
@@ -251,7 +254,7 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
    footer with a scrolling body between them.
    ============================================================ */
 .pin-form-modal.pin-detail-modal { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
-.pin-form-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; gap: 0.85rem; }
+.pin-form-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.85rem; gap: 0.85rem; }
 .pin-form-footer { padding: 0.7rem 0.85rem; border-top: 1px solid var(--border); margin: 0; }
 
 .field-label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
@@ -268,6 +271,11 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 }
 
 .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--border); }
+.avatar-placeholder { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar-placeholder svg { width: 55%; height: 55%; color: var(--text-muted); }
+
+.pin-photo-placeholder { display: flex; align-items: center; justify-content: center; background: var(--border); }
+.pin-photo-placeholder svg { width: 22%; height: 22%; color: var(--text-muted); }
 
 /* ============================================================
    Profile pins grid — Instagram-style 3-up square thumbnails
@@ -300,7 +308,14 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 /* ============================================================
    Friends / Notifications half-screen popups
    ============================================================ */
-.friends-body, .notif-body, .visit-detail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; }
+.friends-body, .notif-body, .visit-detail-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.85rem; }
+/* Distance from "Friends" title to the search box must equal the distance
+   from the search box to the friend list below it. The header-to-body gap
+   is the modal's own 0.75rem .stack gap (friends-modal is both
+   .pin-detail-modal and .stack); cancel the body's own top padding and the
+   search input's stray margin-top, then match this gap to that same
+   0.75rem so both distances land on the same 12px. */
+.friends-body { padding-top: 0; gap: 0.75rem; }
 .friends-modal.pin-detail-modal,
 .notif-modal.pin-detail-modal,
 .visit-detail-modal.pin-detail-modal,
@@ -315,7 +330,6 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 
 html.is-mobile-device .hide-title-mobile { display: none; }
 
-.popup-search-input { margin-top: 0.75rem; }
 .add-pin-tile {
   display: flex;
   align-items: center;
@@ -333,8 +347,9 @@ html.is-mobile-device .hide-title-mobile { display: none; }
 .feed { display: flex; flex-direction: column; gap: 1.5rem; max-width: 480px; margin: 0 auto; }
 .feed-post-photo-placeholder {
   width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-  background: var(--border); font-size: 2.5rem;
+  background: var(--border);
 }
+.feed-post-photo-placeholder svg { width: 22%; height: 22%; color: var(--text-muted); }
 
 /* ============================================================
    Pin detail modal — the same .post-card, capped at ~2/3 viewport
@@ -345,7 +360,15 @@ html.is-mobile-device .hide-title-mobile { display: none; }
   max-height: 50vh;
   padding: 0;
   overflow-y: auto;
+  /* Prevent iOS/Android rubber-band overscroll from bleeding past the
+     scroll container — without this, pulling past the top can detach the
+     sticky header (looks like the drag handle "disappearing") and can
+     push the whole sheet above the viewport top. */
+  overscroll-behavior: contain;
 }
+/* Comments has little content most of the time — size to it instead of
+   forcing the full 50vh (drag-to-expand still works from any height). */
+.comments-modal.pin-detail-modal { height: auto; max-height: 50vh; }
 
 /* ============================================================
    Full-screen modal (friends list) — distinct from the bottom-sheet
@@ -378,10 +401,13 @@ html.is-mobile-device .hide-title-mobile { display: none; }
 .cal-day-grid {
   max-height: 62vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-top: 1px solid var(--border);
   border-radius: var(--radius);
   touch-action: pan-y;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .cal-hour-row { display: flex; border-bottom: 1px solid var(--border); min-height: var(--hour-row-height, 48px); }
 .cal-hour-label { width: 56px; flex-shrink: 0; font-size: 0.7rem; color: var(--text-muted); padding: 4px 6px 0 0; text-align: right; }
@@ -501,10 +527,29 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
 .post-count { font-size: 0.85rem; color: var(--text); }
 .post-map-btn { margin-left: auto; }
 .post-body { padding: 0.3rem 0.85rem 0.85rem; }
+
+/* Post-card loading skeleton (js/postCard.js postCardSkeleton) — shown in
+   place of a card/popup while photo/avatar signed URLs are being fetched. */
+.post-skeleton .post-header-end { min-height: 1.3rem; }
+.skeleton-bar {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--border) 25%, var(--surface) 37%, var(--border) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+.skeleton-photo { width: 100%; aspect-ratio: 4/5; border-radius: 0; }
+.skeleton-icon { width: 23px; height: 23px; border-radius: 50%; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 .post-caption { margin: 0; white-space: pre-wrap; }
 .post-owner-avatar-btn { display: inline-flex; vertical-align: middle; padding: 0; border: none; background: none; cursor: pointer; margin-right: 0.35rem; }
 .post-owner-avatar { width: 22px; height: 22px; vertical-align: middle; }
 .post-owner-name { padding: 0; font-weight: 700; color: var(--text); vertical-align: middle; margin-right: 0.35rem; }
+.post-caption-text { vertical-align: middle; }
+.post-directions-text { display: block; margin-top: 0.4rem; font-style: italic; }
 .post-caption.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .post-showmore-btn { background: none; border: none; padding: 0; color: var(--text-muted); font-size: inherit; cursor: pointer; }
 
@@ -514,7 +559,7 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
    ============================================================ */
 .comments-modal.pin-detail-modal { padding: 0; overflow: hidden; }
 .comments-modal { min-height: 0; }
-.comments-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.85rem; }
+.comments-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0.85rem; }
 .comment-row { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
 .comment-row:last-child { border-bottom: none; }
 .comment-author { padding: 0; font-weight: 600; color: var(--text); }

@@ -99,7 +99,7 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
         </div>
         <div>
           <label class="field-label" for="pinCategory">Category</label>
-          <select id="pinCategory">
+          <select id="pinCategory" required>
             <option value="">Choose a category…</option>
             ${CATEGORIES.map((c) => `<option value="${c}" ${editingPin?.category === c ? "selected" : ""}>${c}</option>`).join("")}
           </select>
@@ -169,6 +169,15 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
   }
   latInput.addEventListener("change", syncFromInputs);
   lngInput.addEventListener("change", syncFromInputs);
+
+  // Easter egg: typing "wowza" as the pin name auto-picks a random category.
+  const titleInput = backdrop.querySelector("#pinTitle");
+  const categorySelect = backdrop.querySelector("#pinCategory");
+  titleInput.addEventListener("input", () => {
+    if (titleInput.value.trim().toLowerCase() === "wowza") {
+      categorySelect.value = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+    }
+  });
 
   // Photo selection with removable previews, capped at MAX_PHOTOS total.
   // Every newly-added photo is cropped to a fixed aspect ratio first so all

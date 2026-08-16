@@ -92,3 +92,25 @@ export async function signOut() {
   await supabase.auth.signOut();
   window.location.href = "login.html";
 }
+
+// Lock the background page's own scroll for as long as any modal backdrop
+// is open. Without this, scrolling/touching the dimmed area behind a
+// popup can move the underlying page, which throws off the drag-handle's
+// pointer math (it stops responding to expand/collapse gestures) —
+// applies to every popup automatically since it just watches the DOM.
+let openBackdropCount = 0;
+new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    for (const node of m.addedNodes) {
+      if (node.nodeType === 1 && (node.classList?.contains("modal-backdrop") || node.classList?.contains("modal-backdrop-full"))) {
+        openBackdropCount++;
+      }
+    }
+    for (const node of m.removedNodes) {
+      if (node.nodeType === 1 && (node.classList?.contains("modal-backdrop") || node.classList?.contains("modal-backdrop-full"))) {
+        openBackdropCount = Math.max(0, openBackdropCount - 1);
+      }
+    }
+  }
+  document.body.style.overflow = openBackdropCount > 0 ? "hidden" : "";
+}).observe(document.body, { childList: true });

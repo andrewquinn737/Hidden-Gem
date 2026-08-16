@@ -25,7 +25,8 @@
   <button id="backBtn" class="btn-link" style="display:none; padding:0; align-self:flex-start;" aria-label="Back">← Back</button>
   <div class="row-between profile-header-row">
     <div class="row" style="align-items:center; gap:0.85rem;">
-      <img id="avatarImg" class="avatar" style="width:64px; height:64px;" src="icons/icon-192.png" />
+      <span id="avatarPlaceholder" class="avatar avatar-placeholder" style="width:64px; height:64px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span>
+      <img id="avatarImg" class="avatar" style="width:64px; height:64px; display:none;" />
       <div>
         <strong id="profileUsername" style="font-size:1.1rem; display:block;">—</strong>
         <span class="muted" style="font-size:0.85rem;">

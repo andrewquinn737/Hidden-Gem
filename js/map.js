@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { openPinDetail } from "./pinDetailModal.js";
 import { searchPlace } from "./geo.js";
+import { MAP_OUTLINE_SVG } from "./placeholders.js";
 
 const PIN_COLORS = {
   mine: "#b5651d", // accent
@@ -272,13 +273,17 @@ if (session) {
         <strong>${escapeHtml(pin.title)}</strong>
         <div class="muted" style="font-size:0.8rem;">${escapeHtml(pin.category || "")}</div>
       </div>
-      <img class="map-pin-popup-thumb" style="display:none;" />
+      <div class="map-pin-popup-thumb pin-photo-placeholder">${MAP_OUTLINE_SVG}</div>
     `;
     el.addEventListener("click", () => {
       activePopup?.remove();
       openPinDetail(pinId, { onChange: loadPins });
     });
-    activePopup = new maplibregl.Popup({ closeButton: false, className: "hg-popup", maxWidth: "420px" })
+    // Anchored to the bottom, offset up by the marker's own on-screen
+    // height (see pinCanvas — rendered at 28x40 CSS px) so the popup sits
+    // directly above the pin instead of overlapping it, with the tip
+    // pointing straight down at it.
+    activePopup = new maplibregl.Popup({ closeButton: false, className: "hg-popup", maxWidth: "420px", anchor: "bottom", offset: 44 })
       .setLngLat(coords)
       .setDOMContent(el)
       .addTo(map);
@@ -292,10 +297,12 @@ if (session) {
       .maybeSingle();
     if (photo) {
       const { data } = await supabase.storage.from("media").createSignedUrl(photo.storage_path, 3600);
-      const img = el.querySelector(".map-pin-popup-thumb");
-      if (data?.signedUrl && img) {
+      const placeholder = el.querySelector(".map-pin-popup-thumb");
+      if (data?.signedUrl && placeholder) {
+        const img = document.createElement("img");
+        img.className = "map-pin-popup-thumb";
         img.src = data.signedUrl;
-        img.style.display = "block";
+        placeholder.replaceWith(img);
       }
     }
   }
@@ -360,10 +367,20 @@ if (session) {
   let pressStart = null;
   let pressTimer = null;
   let pressFired = false;
+  const activePointers = new Set();
 
   mapContainer.addEventListener("pointerdown", (e) => {
+    activePointers.add(e.pointerId);
     if (repositionPinId) return;
     if (e.target.closest(".maplibregl-popup, .maplibregl-marker, .maplibregl-ctrl")) return;
+    // A second finger landing — whether it starts this gesture or joins one
+    // already pending — means it's a pinch/rotate, not a long-press to add
+    // a pin, so bail out entirely.
+    if (activePointers.size > 1) {
+      clearTimeout(pressTimer);
+      pressStart = null;
+      return;
+    }
     pressStart = { x: e.clientX, y: e.clientY };
     pressFired = false;
     pressTimer = setTimeout(() => {
@@ -381,7 +398,8 @@ if (session) {
     }
   });
   ["pointerup", "pointercancel"].forEach((evt) =>
-    mapContainer.addEventListener(evt, () => {
+    mapContainer.addEventListener(evt, (e) => {
+      activePointers.delete(e.pointerId);
       clearTimeout(pressTimer);
       pressStart = null;
     })

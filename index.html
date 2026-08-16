@@ -31,6 +31,11 @@
   .map-toolbar form { flex: 1; min-width: 160px; display: flex; }
   .map-toolbar input { border-radius: var(--radius) 0 0 var(--radius); }
   .map-toolbar button[type=submit] { border-radius: 0 var(--radius) var(--radius) 0; }
+  /* Nudge the zoom control up so it clears the floating mobile tab bar
+     instead of sitting underneath/behind it. */
+  html.is-mobile-device .maplibregl-ctrl-bottom-right {
+    margin-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
 </style>
 </head>
 <body data-page="index.html">

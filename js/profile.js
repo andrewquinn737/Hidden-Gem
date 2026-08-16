@@ -3,13 +3,9 @@ import { supabase } from "./supabaseClient.js";
 import { openPinForm } from "./pinForm.js";
 import { openPinDetail, openPinDetailFullscreen } from "./pinDetailModal.js";
 import { setupSheetDrag } from "./sheetDrag.js";
+import { MAP_OUTLINE_SVG, PERSON_OUTLINE_SVG, avatarPlaceholderHtml } from "./placeholders.js";
 
 const NOTIF_SEEN_KEY = "hg:notifSeenAt";
-const PERSON_PLACEHOLDER = `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:38%; height:38%; color:var(--text-muted);">
-    <circle cx="12" cy="8" r="4"/>
-    <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
-  </svg>`;
 
 const session = await requireSession();
 if (session) {
@@ -59,7 +55,12 @@ if (session) {
     document.getElementById("profileUsername").textContent = profile?.username || "—";
     if (profile?.avatar_url) {
       const { data } = await supabase.storage.from("media").createSignedUrl(profile.avatar_url, 3600);
-      if (data?.signedUrl) document.getElementById("avatarImg").src = data.signedUrl;
+      if (data?.signedUrl) {
+        const avatarImg = document.getElementById("avatarImg");
+        avatarImg.src = data.signedUrl;
+        avatarImg.style.display = "";
+        document.getElementById("avatarPlaceholder").style.display = "none";
+      }
     }
   }
 
@@ -224,12 +225,15 @@ if (session) {
       listEl.innerHTML = "";
       for (const friend of filtered) {
         const reqRow = accepted.find((r) => r.requester_id === friend.id || r.recipient_id === friend.id);
-        const avatarUrl = (friend.avatar_url && signedByPath[friend.avatar_url]) || "icons/icon-192.png";
+        const avatarUrl = friend.avatar_url && signedByPath[friend.avatar_url];
+        const avatarHtml = avatarUrl
+          ? `<img class="avatar" style="width:32px; height:32px;" src="${avatarUrl}" />`
+          : avatarPlaceholderHtml("avatar", "width:32px; height:32px;");
         const row = document.createElement("div");
         row.className = "row-between";
         row.innerHTML = `
           <button class="btn-link goto-profile row" style="padding:0; gap:0.5rem; color:var(--text);">
-            <img class="avatar" style="width:32px; height:32px;" src="${avatarUrl}" />
+            ${avatarHtml}
             <span>${escapeHtml(friend.username)}</span>
           </button>
           <button class="btn btn-danger unfriend-btn">Unfriend</button>
@@ -307,7 +311,7 @@ if (session) {
         img.alt = pin.title;
         tile.appendChild(img);
       } else {
-        tile.innerHTML = `<div class="row" style="height:100%; width:100%; align-items:center; justify-content:center; background:var(--border);">${PERSON_PLACEHOLDER}</div>`;
+        tile.innerHTML = `<div class="pin-photo-placeholder" style="height:100%; width:100%;">${MAP_OUTLINE_SVG}</div>`;
       }
       tile.addEventListener("click", () => openPinDetailFullscreen(pin.id, { onChange: () => { loadPinsGrid(); loadCounts(); } }));
       gridEl.appendChild(tile);
@@ -468,13 +472,19 @@ if (session) {
   }
 
   function openEditProfileModal() {
+    const headerAvatarImg = document.getElementById("avatarImg");
+    const hasAvatar = headerAvatarImg.style.display !== "none";
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
     backdrop.innerHTML = `
       <div class="modal stack">
         <h2 style="margin:0;">Edit profile</h2>
         <div class="row">
-          <img id="editAvatarImg" class="avatar" style="width:56px; height:56px;" src="${document.getElementById("avatarImg").src}" />
+          ${
+            hasAvatar
+              ? `<img id="editAvatarImg" class="avatar" style="width:56px; height:56px;" src="${headerAvatarImg.src}" />`
+              : `<span id="editAvatarImg" class="avatar avatar-placeholder" style="width:56px; height:56px;">${PERSON_OUTLINE_SVG}</span>`
+          }
           <label class="btn">
             Change photo
             <input id="editAvatarInput" type="file" accept="image/*" style="display:none;" />
@@ -508,7 +518,15 @@ if (session) {
       if (uploadError) return alert(uploadError.message);
       await supabase.from("profiles").update({ avatar_url: path }).eq("id", session.user.id);
       const { data } = await supabase.storage.from("media").createSignedUrl(path, 3600);
-      if (data?.signedUrl) backdrop.querySelector("#editAvatarImg").src = data.signedUrl;
+      if (data?.signedUrl) {
+        const current = backdrop.querySelector("#editAvatarImg");
+        const img = document.createElement("img");
+        img.id = "editAvatarImg";
+        img.className = "avatar";
+        img.style.cssText = "width:56px; height:56px;";
+        img.src = data.signedUrl;
+        current.replaceWith(img);
+      }
       await loadProfile();
     });
 
