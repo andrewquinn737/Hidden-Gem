@@ -567,3 +567,30 @@ create policy "media_delete_pin_photos" on storage.objects for delete using (
   bucket_id = 'media' and (storage.foldername(name))[1] = 'pins'
   and private.is_pin_owner(((storage.foldername(name))[2])::uuid)
 );
+
+-- ============================================================
+-- Web Push notifications (applied live via Management API — pg_net
+-- extension enabled, VAPID keys + PUSH_TRIGGER_SECRET stored as edge
+-- function secrets, not in this file). Fires the send-push edge function
+-- for the same events the in-app notifications panel already shows:
+-- comments/likes/saves on a pin you own, and incoming follow requests.
+-- ============================================================
+create table public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create index push_subscriptions_user_id_idx on public.push_subscriptions(user_id);
+alter table public.push_subscriptions enable row level security;
+create policy "push_subscriptions_select_self" on public.push_subscriptions for select using (user_id = auth.uid());
+create policy "push_subscriptions_insert_self" on public.push_subscriptions for insert with check (user_id = auth.uid());
+create policy "push_subscriptions_update_self" on public.push_subscriptions for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "push_subscriptions_delete_self" on public.push_subscriptions for delete using (user_id = auth.uid());
+
+-- private.notify_push() and its four per-table trigger wrappers
+-- (notify_push_comment/like/save/follow_request) live in
+-- migration_push_notifications.sql — kept out of this file since it embeds
+-- the trigger secret used to authenticate calls to the edge function.

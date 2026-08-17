@@ -4,6 +4,7 @@ import { openPinForm } from "./pinForm.js";
 import { openPinDetail, openPinDetailFullscreen } from "./pinDetailModal.js";
 import { setupSheetDrag } from "./sheetDrag.js";
 import { MAP_OUTLINE_SVG, PERSON_OUTLINE_SVG, avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
+import { pushSupported, pushSubscriptionState, enablePush, disablePush } from "./push.js";
 
 const NOTIF_SEEN_KEY = "hg:notifSeenAt";
 
@@ -457,6 +458,10 @@ if (session) {
           <div class="post-header-end"><button class="post-close-btn" aria-label="Close">✕</button></div>
         </div>
         <div class="notif-body stack">
+          <button id="pushToggleBtn" class="row-between push-toggle-row" style="display:none;">
+            <span>Push notifications</span>
+            <span id="pushToggleState" class="muted"></span>
+          </button>
           ${
             items.length
               ? items
@@ -485,6 +490,41 @@ if (session) {
       row.addEventListener("click", () => {
         if (row.dataset.href) window.location.href = row.dataset.href;
       });
+    });
+    setupPushToggle(modalEl);
+  }
+
+  async function setupPushToggle(modalEl) {
+    const btn = modalEl.querySelector("#pushToggleBtn");
+    const stateEl = modalEl.querySelector("#pushToggleState");
+    if (!pushSupported()) return;
+
+    const refresh = async () => {
+      const state = await pushSubscriptionState();
+      if (state === "denied") {
+        stateEl.textContent = "Blocked in browser settings";
+        btn.disabled = true;
+      } else {
+        stateEl.textContent = state === "subscribed" ? "On" : "Off — tap to enable";
+        btn.disabled = false;
+      }
+      btn.style.display = "flex";
+      return state;
+    };
+
+    let state = await refresh();
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        if (state === "subscribed") {
+          await disablePush();
+        } else {
+          await enablePush();
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+      state = await refresh();
     });
   }
 
