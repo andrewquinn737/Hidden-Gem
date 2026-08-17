@@ -47,6 +47,10 @@
   /* Match the zoom control to the toolbar buttons: same translucent white
      and border, no divider lines between the grouped +/−/compass buttons. */
   .maplibregl-ctrl-group {
+    /* MapLibre's own default paints this container #fff directly — the
+       buttons inside being translucent doesn't matter if the shape behind
+       them is always white, which is what was still showing in dark mode. */
+    background: var(--map-toolbar-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
