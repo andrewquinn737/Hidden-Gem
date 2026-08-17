@@ -396,7 +396,6 @@ html.is-desktop-device .modal { border-radius: var(--radius); }
 .profile-toggle-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
 .profile-toggle-btn:first-child { border-right: 1px solid var(--border); }
 .profile-toggle-btn.active:first-child { border-right-color: var(--accent); }
-.profile-bio-line { display: block; font-size: 0.85rem; color: var(--text-muted-strong); margin: 0.1rem 0; }
 
 /* ============================================================
    Friends / Notifications half-screen popups
@@ -656,6 +655,10 @@ html.is-mobile-device .pin-detail-modal .post-close-btn { display: none; }
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  /* A dark fill so any subpixel rounding gap between a fractional-width
+     flex item and its 100%-wide image (common on desktop's wider, less
+     even column widths) blends in instead of showing as a white sliver. */
+  background: #000;
 }
 .post-carousel img { flex: 0 0 100%; scroll-snap-align: start; width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block; }
 .post-carousel .feed-post-photo-placeholder { flex: 0 0 100%; scroll-snap-align: start; }

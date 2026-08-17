@@ -57,13 +57,6 @@ if (session) {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", viewingUserId).single();
     profileCache = profile;
     document.getElementById("profileUsername").textContent = profile?.username || "—";
-    const bioLine = document.getElementById("profileBioLine");
-    if (profile?.bio) {
-      bioLine.textContent = profile.bio;
-      bioLine.style.display = "block";
-    } else {
-      bioLine.style.display = "none";
-    }
     if (profile?.avatar_url) {
       const { data } = await supabase.storage.from("media").createSignedUrl(profile.avatar_url, 3600);
       if (data?.signedUrl) {
@@ -522,7 +515,6 @@ if (session) {
           <form id="editProfileForm" class="stack">
             <input id="editUsername" placeholder="Username" required maxlength="15" value="${profileCache?.username ?? ""}" />
             <input id="editFullName" placeholder="Full name" maxlength="15" value="${profileCache?.full_name ?? ""}" />
-            <textarea id="editBio" placeholder="Bio" rows="3" maxlength="30">${profileCache?.bio ?? ""}</textarea>
             <p class="error-text" id="editProfileError" style="display:none;"></p>
             <div class="row">
               <button type="button" id="editCancelBtn" class="btn" style="flex:1;">Cancel</button>
@@ -569,8 +561,7 @@ if (session) {
       errorEl.style.display = "none";
       const username = backdrop.querySelector("#editUsername").value.trim();
       const full_name = backdrop.querySelector("#editFullName").value.trim() || null;
-      const bio = backdrop.querySelector("#editBio").value.trim() || null;
-      const { error } = await supabase.from("profiles").update({ username, full_name, bio }).eq("id", session.user.id);
+      const { error } = await supabase.from("profiles").update({ username, full_name }).eq("id", session.user.id);
       if (error) {
         errorEl.textContent = error.message;
         errorEl.style.display = "block";

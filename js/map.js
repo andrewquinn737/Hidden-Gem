@@ -204,7 +204,17 @@ if (session) {
         type: "symbol",
         source: "pins",
         filter: ["has", "point_count"],
-        layout: { "text-field": "{point_count_abbreviated}", "text-size": 13, "text-font": ["Noto Sans Bold"] },
+        layout: {
+          "text-field": "{point_count_abbreviated}",
+          "text-size": 13,
+          "text-font": ["Noto Sans Bold"],
+          // allow/ignore-placement skip the collision-resolution queue,
+          // which is what was making the count fade in a beat behind the
+          // circle itself (opacity-transition alone doesn't cover that —
+          // symbol placement has its own internal crossfade).
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
         paint: { "text-color": "#fff", "text-opacity-transition": { duration: 0 } },
       });
       map.addLayer({

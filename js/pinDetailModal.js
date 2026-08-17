@@ -10,6 +10,11 @@ export async function openPinDetail(pinId, { onChange, startFull = false } = {})
     data: { user },
   } = await supabase.auth.getUser();
 
+  // On desktop, posts specifically (not comments/friends/other popups) should
+  // always fill the viewport top to bottom rather than float half-height in
+  // the middle of the screen — mobile keeps its normal half/full toggle.
+  if (document.documentElement.classList.contains("is-desktop-device")) startFull = true;
+
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.innerHTML = `<div class="modal pin-detail-modal">${postCardSkeleton()}</div>`;
