@@ -1,4 +1,20 @@
 import { supabase } from "./supabaseClient.js";
+import { pushSupported, enablePush } from "./push.js";
+
+const PUSH_PROMPT_KEY = "hg:pushPromptShown";
+
+// Ask once, ever, per browser/device — never re-prompt after the first
+// app open regardless of whether the user allows or blocks it. Fires after
+// requireSession() so it never runs on the public login page, and is
+// intentionally not awaited so it can't delay page load.
+function maybePromptForPush() {
+  if (localStorage.getItem(PUSH_PROMPT_KEY)) return;
+  localStorage.setItem(PUSH_PROMPT_KEY, "1");
+  if (!pushSupported() || Notification.permission !== "default") return;
+  enablePush().catch(() => {
+    // Denied or failed — fine, we still never ask again (flag is already set).
+  });
+}
 
 const NAV_ITEMS = [
   {
@@ -37,6 +53,7 @@ export async function requireSession() {
     return null;
   }
   renderNav();
+  maybePromptForPush();
 
   // A session with no profile row is a rare edge case (nothing currently
   // reads the profile from here — pages that need it fetch it themselves).
