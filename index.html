@@ -53,6 +53,12 @@
     box-shadow: none !important;
   }
   .maplibregl-ctrl-group button + button { border-top: none !important; }
+  /* MapLibre bakes the +/-/compass icons as dark-gray SVGs regardless of
+     theme — against the dark translucent toolbar they're nearly invisible.
+     Invert just the icon layer so they read as light against the dark bg. */
+  @media (prefers-color-scheme: dark) {
+    .maplibregl-ctrl-group .maplibregl-ctrl-icon { filter: invert(1); }
+  }
   /* Align the zoom control with the floating mobile tab bar: same right
      inset, sitting just above its top edge instead of underneath/behind
      it. 4.25rem ≈ the tab bar's own height (~3.75rem) plus a small gap. */
