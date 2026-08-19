@@ -2,6 +2,7 @@ import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
 import { openPinDetailFullscreen } from "./pinDetailModal.js";
 import { avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
+import { getSignedUrl, getSignedUrls } from "./signedUrlCache.js";
 
 const RESULT_LIMIT = 7;
 const RECENT_KEY = "hg:recentSearchResults";
@@ -58,8 +59,8 @@ if (session) {
     const avatarPaths = recent.filter((r) => r.type === "profile" && r.avatar_url).map((r) => r.avatar_url);
     const signedByPath = {};
     if (avatarPaths.length) {
-      const { data: signed } = await supabase.storage.from("media").createSignedUrls(avatarPaths, 3600);
-      (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
+      const urls = await getSignedUrls(avatarPaths);
+      avatarPaths.forEach((path, i) => (signedByPath[path] = urls[i]));
     }
 
     resultsEl.innerHTML = `<h3 style="margin:0.5rem 0 0;">Recent searches</h3>`;
@@ -107,16 +108,14 @@ if (session) {
         });
         resultsEl.appendChild(row);
         if (p.avatar_url) {
-          supabase.storage
-            .from("media")
-            .createSignedUrl(p.avatar_url, 3600)
-            .then(({ data }) => {
-              if (!data?.signedUrl) return;
+          getSignedUrl(p.avatar_url)
+            .then((signedUrl) => {
+              if (!signedUrl) return;
               const placeholder = row.querySelector(".avatar-placeholder");
               const img = document.createElement("img");
               img.className = "avatar";
               img.style.cssText = "width:32px; height:32px;";
-              img.src = data.signedUrl;
+              img.src = signedUrl;
               placeholder.replaceWith(img);
             });
         }

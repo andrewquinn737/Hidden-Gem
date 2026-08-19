@@ -3,6 +3,7 @@ import { openPinForm } from "./pinForm.js";
 import { setupSheetDrag } from "./sheetDrag.js";
 import { MAP_OUTLINE_SVG, avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
 import { reverseGeocodeLabel } from "./geoReverse.js";
+import { getSignedUrl, getSignedUrls } from "./signedUrlCache.js";
 
 const PIN_SELECT =
   "id, title, description, directions, category, owner_id, lat, lng, pin_photos(storage_path, created_at), pin_likes(user_id), pin_saves(user_id), pin_comments(count), profiles!pins_owner_id_fkey(username, avatar_url)";
@@ -73,17 +74,12 @@ export async function renderPostCard(pin, container, options = {}) {
 
   let photoUrls = [];
   if (photos.length) {
-    const { data: signed } = await supabase.storage.from("media").createSignedUrls(
-      photos.map((p) => p.storage_path),
-      3600
-    );
-    photoUrls = (signed || []).map((s) => s.signedUrl).filter(Boolean);
+    photoUrls = (await getSignedUrls(photos.map((p) => p.storage_path))).filter(Boolean);
   }
 
   let ownerAvatarUrl = null;
   if (pin.profiles?.avatar_url) {
-    const { data } = await supabase.storage.from("media").createSignedUrl(pin.profiles.avatar_url, 3600);
-    if (data?.signedUrl) ownerAvatarUrl = data.signedUrl;
+    ownerAvatarUrl = await getSignedUrl(pin.profiles.avatar_url);
   }
 
   const card = container;

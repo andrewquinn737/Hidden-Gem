@@ -4,6 +4,7 @@ import { openPinForm } from "./pinForm.js";
 import { openPinDetail, openPinDetailFullscreen } from "./pinDetailModal.js";
 import { setupSheetDrag } from "./sheetDrag.js";
 import { MAP_OUTLINE_SVG, PERSON_OUTLINE_SVG, avatarPlaceholderHtml, skeletonListHtml } from "./placeholders.js";
+import { getSignedUrl, getSignedUrls } from "./signedUrlCache.js";
 
 const NOTIF_SEEN_KEY = "hg:notifSeenAt";
 
@@ -58,10 +59,10 @@ if (session) {
     profileCache = profile;
     document.getElementById("profileUsername").textContent = profile?.username || "—";
     if (profile?.avatar_url) {
-      const { data } = await supabase.storage.from("media").createSignedUrl(profile.avatar_url, 3600);
-      if (data?.signedUrl) {
+      const signedUrl = await getSignedUrl(profile.avatar_url);
+      if (signedUrl) {
         const avatarImg = document.getElementById("avatarImg");
-        avatarImg.src = data.signedUrl;
+        avatarImg.src = signedUrl;
         avatarImg.style.display = "";
         document.getElementById("avatarPlaceholder").style.display = "none";
       }
@@ -218,8 +219,8 @@ if (session) {
     const signedByPath = {};
     const avatarPaths = people.map((p) => p.avatar_url).filter(Boolean);
     if (avatarPaths.length) {
-      const { data: signed } = await supabase.storage.from("media").createSignedUrls(avatarPaths, 3600);
-      (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
+      const urls = await getSignedUrls(avatarPaths);
+      avatarPaths.forEach((path, i) => (signedByPath[path] = urls[i]));
     }
 
     // Only the owner of this list can remove entries: unfollow someone in
@@ -311,8 +312,8 @@ if (session) {
     const coverPaths = covers.filter(Boolean).map((c) => c.storage_path);
     let signedByPath = {};
     if (coverPaths.length) {
-      const { data: signed } = await supabase.storage.from("media").createSignedUrls(coverPaths, 3600);
-      (signed || []).forEach((s) => (signedByPath[s.path] = s.signedUrl));
+      const urls = await getSignedUrls(coverPaths);
+      coverPaths.forEach((path, i) => (signedByPath[path] = urls[i]));
     }
 
     pins.forEach((pin, i) => {
@@ -542,14 +543,14 @@ if (session) {
       const { error: uploadError } = await supabase.storage.from("media").upload(path, file);
       if (uploadError) return alert(uploadError.message);
       await supabase.from("profiles").update({ avatar_url: path }).eq("id", session.user.id);
-      const { data } = await supabase.storage.from("media").createSignedUrl(path, 3600);
-      if (data?.signedUrl) {
+      const signedUrl = await getSignedUrl(path);
+      if (signedUrl) {
         const current = backdrop.querySelector("#editAvatarImg");
         const img = document.createElement("img");
         img.id = "editAvatarImg";
         img.className = "avatar";
         img.style.cssText = "width:56px; height:56px;";
-        img.src = data.signedUrl;
+        img.src = signedUrl;
         current.replaceWith(img);
       }
       await loadProfile();

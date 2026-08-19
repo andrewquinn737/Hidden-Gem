@@ -1,5 +1,6 @@
 import { requireSession } from "./auth.js";
 import { supabase } from "./supabaseClient.js";
+import { getSignedUrls } from "./signedUrlCache.js";
 
 const session = await requireSession();
 if (session) {
@@ -33,12 +34,7 @@ if (session) {
         .order("created_at", { ascending: true }),
     ]);
 
-    const photoUrls = await Promise.all(
-      (photos || []).map(async (p) => {
-        const { data } = await supabase.storage.from("media").createSignedUrl(p.storage_path, 3600);
-        return data?.signedUrl;
-      })
-    );
+    const photoUrls = await getSignedUrls((photos || []).map((p) => p.storage_path));
 
     root.innerHTML = `
       <div class="stack">

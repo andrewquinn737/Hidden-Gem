@@ -4,6 +4,7 @@ import { openPinForm } from "./pinForm.js";
 import { openPinDetail } from "./pinDetailModal.js";
 import { searchPlace } from "./geo.js";
 import { MAP_OUTLINE_SVG } from "./placeholders.js";
+import { getSignedUrl } from "./signedUrlCache.js";
 import { STYLES, CATEGORIES, pinCanvas, retintParchment } from "./mapStyles.js";
 
 const PIN_COLORS = {
@@ -318,12 +319,12 @@ if (session) {
       .limit(1)
       .maybeSingle();
     if (photo) {
-      const { data } = await supabase.storage.from("media").createSignedUrl(photo.storage_path, 3600);
+      const signedUrl = await getSignedUrl(photo.storage_path);
       const placeholder = el.querySelector(".map-pin-popup-thumb");
-      if (data?.signedUrl && placeholder) {
+      if (signedUrl && placeholder) {
         const img = document.createElement("img");
         img.className = "map-pin-popup-thumb";
-        img.src = data.signedUrl;
+        img.src = signedUrl;
         placeholder.replaceWith(img);
       }
     }

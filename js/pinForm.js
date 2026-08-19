@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient.js";
 import { cropImageToAspect } from "./imageCrop.js";
 import { setupSheetDrag } from "./sheetDrag.js";
 import { STYLES, CATEGORIES, ensureMapLibre, retintParchment, tryAddClusterLayers } from "./mapStyles.js";
+import { getSignedUrl } from "./signedUrlCache.js";
 
 const MAX_PHOTOS = 3;
 const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
@@ -239,8 +240,7 @@ export async function openPinForm({ lat, lng, editingPin, onSaved }) {
       const wrap = document.createElement("div");
       wrap.style.position = "relative";
       const img = document.createElement("img");
-      const { data } = await supabase.storage.from("media").createSignedUrl(photo.storage_path, 3600);
-      img.src = data?.signedUrl || "";
+      img.src = (await getSignedUrl(photo.storage_path)) || "";
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.textContent = "×";
